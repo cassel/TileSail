@@ -15,7 +15,8 @@ let package = Package(
     platforms: [.macOS(.v13)],
     // Products define the executables and libraries a package produces, making them visible to other packages.
     products: [
-        .executable(name: "aerospace", targets: ["Cli"]),
+        .executable(name: "aerospace", targets: ["Cli"]), // Compatibility with existing scripts.
+        .executable(name: "tilesail", targets: ["Cli"]),
         // Don't use this build for release, use xcode instead
         .executable(name: "AeroSpaceApp", targets: ["AeroSpaceApp"]),
         // We only need to expose this as a product for xcode

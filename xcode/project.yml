@@ -36,11 +36,11 @@ targets:
         CODE_SIGN_IDENTITY: ${XCODEGEN_AEROSPACE_CODE_SIGN_IDENTITY}
       configs:
         Debug:
-          PRODUCT_NAME: AeroSpaceSmooth
+          PRODUCT_NAME: TileSail
           PRODUCT_BUNDLE_IDENTIFIER: bobko.aerospace.debug
         Release:
-          PRODUCT_NAME: AeroSpace
-          PRODUCT_BUNDLE_IDENTIFIER: bobko.aerospace
+          PRODUCT_NAME: TileSail
+          PRODUCT_BUNDLE_IDENTIFIER: us.cassel.tilesail
           SWIFT_TREAT_WARNINGS_AS_ERRORS: YES
           GCC_TREAT_WARNINGS_AS_ERRORS: YES
     entitlements:

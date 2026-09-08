@@ -72,7 +72,7 @@ struct ServerArgs: Sendable {
 }
 
 private let serverHelp = """
-    USAGE: \(CommandLine.arguments.first ?? "AeroSpace.app/Contents/MacOS/AeroSpace") [<options>]
+    USAGE: \(CommandLine.arguments.first ?? "TileSail.app/Contents/MacOS/TileSail") [<options>]
 
     OPTIONS:
       -h, --help              Print help
@@ -81,7 +81,7 @@ private let serverHelp = """
                               and ${XDG_CONFIG_HOME}/aerospace/aerospace.toml
       --read-only             Disable window management.
                               Useful if you want to use only debug-windows or other query commands.
-      --open-settings         Open the AeroSpaceSmooth Settings window after launch.
+      --open-settings         Open the TileSail Settings window after launch.
     """
 
 nonisolated(unsafe) private var _serverArgs = ServerArgs()

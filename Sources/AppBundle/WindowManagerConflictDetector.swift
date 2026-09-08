@@ -20,6 +20,7 @@ enum WindowManagerConflictDetector {
     private static let knownNames: Set<String> = [
         "aerospace",
         "aerospacesmooth",
+        "tilesail",
         "amethyst",
         "omniwm",
         "yabai",

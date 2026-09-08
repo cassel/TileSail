@@ -28,7 +28,7 @@ private struct SmoothCustomLayoutEditorTarget: Identifiable {
 
 @MainActor
 public func smoothLayoutSettingsWindow() -> some Scene {
-    SwiftUI.Window("AeroSpaceSmooth Settings", id: smoothLayoutSettingsWindowId) {
+    SwiftUI.Window("TileSail Settings", id: smoothLayoutSettingsWindowId) {
         SmoothLayoutSettingsView()
             .frame(minWidth: 1040, minHeight: 680)
     }
@@ -59,7 +59,7 @@ public func scheduleCommandLineSettingsWindowIfRequested() {
     DispatchQueue.main.async {
         let content = NSHostingController(rootView: SmoothLayoutSettingsView())
         let window = NSWindow(contentViewController: content)
-        window.title = "AeroSpaceSmooth Settings"
+        window.title = "TileSail Settings"
         window.setContentSize(NSSize(width: 1180, height: 820))
         window.styleMask = [.titled, .closable, .miniaturizable, .resizable]
         window.center()
@@ -135,7 +135,7 @@ private struct SmoothLayoutSettingsView: View {
                 settingsFooter
             }
         }
-        .navigationTitle("AeroSpaceSmooth")
+        .navigationTitle("TileSail")
     }
 
     @ViewBuilder
@@ -171,7 +171,7 @@ private struct SmoothLayoutSettingsView: View {
                 ) {
                     Text("Also running: \(conflictMonitor.conflicts.map(\.name).joined(separator: ", "))")
                         .foregroundStyle(.orange)
-                    Text("Quit the other window manager or restart AeroSpaceSmooth and choose which one should remain active.")
+                    Text("Quit the other window manager or restart TileSail and choose which one should remain active.")
                         .font(.caption)
                         .foregroundStyle(.secondary)
                 }
@@ -242,7 +242,7 @@ private struct SmoothLayoutSettingsView: View {
             SettingsCard(
                 "Updates",
                 systemImage: "arrow.down.circle",
-                help: "Checks the public AeroSpaceSmooth releases on GitHub. Updates are never downloaded or installed automatically.",
+                help: "Checks the public TileSail releases on GitHub. Updates are never downloaded or installed automatically.",
             ) {
                 Toggle(
                     "Check for updates daily",
@@ -286,7 +286,7 @@ private struct SmoothLayoutSettingsView: View {
             SettingsCard(
                 "Menu Bar",
                 systemImage: "menubar.rectangle",
-                help: "AeroSpaceSmooth appears in every menu bar macOS makes available. Choose exactly what each menu bar should show.",
+                help: "TileSail appears in every menu bar macOS makes available. Choose exactly what each menu bar should show.",
             ) {
                 LabeledContent("Appears On") {
                     Label("All Displays", systemImage: "checkmark.circle.fill")
@@ -394,7 +394,7 @@ private struct SmoothLayoutSettingsView: View {
             SettingsCard(
                 "Restore Manual Layouts",
                 systemImage: "arrow.counterclockwise.square",
-                help: "When automatic layout is disabled for a monitor, AeroSpaceSmooth remembers that workspace's tiling groups, order and proportions and restores them after relaunch.",
+                help: "When automatic layout is disabled for a monitor, TileSail remembers that workspace's tiling groups, order and proportions and restores them after relaunch.",
             ) {
                 Toggle(
                     "Remember layouts while automatic layout is off",
@@ -1568,7 +1568,7 @@ private struct MonitorLayoutsSettingsPane: View {
                     .toggleStyle(.switch)
                     SettingInfoButton(
                         title: "Automatic layout",
-                        message: "When enabled, AeroSpaceSmooth selects the layout configured for the current number of tiled windows on this monitor. Disable it to use standard AeroSpace behavior.",
+                        message: "When enabled, TileSail selects the layout configured for the current number of tiled windows on this monitor. Disable it to use standard AeroSpace behavior.",
                     )
                 }
 

@@ -247,7 +247,7 @@
 				MACOSX_DEPLOYMENT_TARGET = 13.0;
 				MARKETING_VERSION = "0.0.0-SNAPSHOT";
 				PRODUCT_BUNDLE_IDENTIFIER = bobko.aerospace.debug;
-				PRODUCT_NAME = AeroSpaceSmooth;
+				PRODUCT_NAME = TileSail;
 				SDKROOT = macosx;
 				SWIFT_VERSION = 6.2;
 			};
@@ -324,8 +324,8 @@
 				);
 				MACOSX_DEPLOYMENT_TARGET = 13.0;
 				MARKETING_VERSION = "0.0.0-SNAPSHOT";
-				PRODUCT_BUNDLE_IDENTIFIER = bobko.aerospace;
-				PRODUCT_NAME = AeroSpace;
+				PRODUCT_BUNDLE_IDENTIFIER = us.cassel.tilesail;
+				PRODUCT_NAME = TileSail;
 				SDKROOT = macosx;
 				SWIFT_TREAT_WARNINGS_AS_ERRORS = YES;
 				SWIFT_VERSION = 6.2;

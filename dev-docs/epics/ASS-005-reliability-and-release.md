@@ -3,7 +3,7 @@
 ## Goal
 
 Ship the custom editor without repeating the loops, duplicate instances or
-unexpected monitor moves found during early AeroSpaceSmooth development.
+unexpected monitor moves found during early TileSail development.
 
 ## Scope
 

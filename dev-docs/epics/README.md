@@ -1,9 +1,7 @@
-# AeroSpaceSmooth product roadmap
+# TileSail product roadmap
 
-This directory is the source of truth for product epics that are specific to the
-AeroSpaceSmooth fork. Upstream AeroSpace does not accept regular GitHub issues,
-and this checkout currently has only the upstream remote, so the roadmap lives
-in the repository until a writable fork remote and project board are connected.
+This directory records the TileSail product roadmap. Report bugs and propose
+improvements at https://github.com/cassel/TileSail/issues.
 
 ## Product principles
 

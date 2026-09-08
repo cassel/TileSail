@@ -20,7 +20,7 @@ window-by-window layout writes with a single layout transaction.
 
 ## Monitor layout profiles
 
-Open the AeroSpaceSmooth menu and choose **Settings…** (`Command+Shift+L`).
+Open the TileSail menu and choose **Settings…** (`Command+Shift+L`).
 Each detected display has its own profile with:
 
 - An enable switch for native automatic organization.
@@ -54,7 +54,7 @@ layout-animation-respect-reduce-motion = true
 ## Build
 
 ```sh
-cd /Users/cassel/app/AeroSpaceSmooth
+cd /Users/cassel/app/TileSail
 ./build-debug.sh -Xswiftc -warnings-as-errors
 ./swift-test.sh
 ./lint.sh
@@ -72,15 +72,15 @@ xcodebuild \
 The generated app is:
 
 ```text
-/Users/cassel/app/AeroSpaceSmooth/xcode/.xcode-build/Build/Products/Debug/AeroSpaceSmooth.app
+/Users/cassel/app/TileSail/xcode/.xcode-build/Build/Products/Debug/TileSail.app
 ```
 
 ## Manual test safety
 
-Do not run the installed AeroSpace and an additional AeroSpaceSmooth build simultaneously. They
+Do not run the installed AeroSpace and an additional TileSail build simultaneously. They
 both manage the same windows, shortcuts, and server resources. Quit the
 installed app first, install the debug build at the canonical
-`/Users/cassel/Applications/AeroSpaceSmooth.app` path, and grant AeroSpaceSmooth
+`/Users/cassel/Applications/TileSail.app` path, and grant TileSail
 Accessibility permission when macOS asks.
 
 The first manual test should cover:

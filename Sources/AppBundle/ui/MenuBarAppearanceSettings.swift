@@ -22,7 +22,7 @@ enum MenuBarPresentation: String, CaseIterable, Identifiable, Equatable, Hashabl
 
     var explanation: String {
         switch self {
-            case .iconOnly: "Shows only the AeroSpaceSmooth icon."
+            case .iconOnly: "Shows only the TileSail icon."
             case .focusedWorkspace: "Shows only the focused workspace name, without the app icon."
             case .activeWorkspaces: "Shows only the active workspace from each display, without the app icon."
             case .i3Grouped: "Shows only workspace chips, with visible workspaces first and hidden occupied workspaces after the divider."

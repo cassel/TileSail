@@ -10,4 +10,5 @@ swift build --target AppBundleTests "$@" # swift build doesn't build test target
 
 rm -rf .debug && mkdir .debug
 cp -r .build/debug/aerospace .debug
-cp -r .build/debug/AeroSpaceApp .debug
+cp .build/debug/AeroSpaceApp .debug/TileSail
+cp .build/debug/tilesail .debug/tilesail

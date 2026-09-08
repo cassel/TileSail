@@ -38,7 +38,7 @@ final class UpdateChecker: ObservableObject {
 
     private static let automaticKey = "AeroSpaceSmooth.automatically-check-for-updates"
     private static let lastCheckKey = "AeroSpaceSmooth.last-update-check"
-    private static let releasesApi = URL(string: "https://api.github.com/repos/cassel/AeroSpaceSmooth/releases/latest").orDie()
+    private static let releasesApi = URL(string: "https://api.github.com/repos/cassel/TileSail/releases/latest").orDie()
     private let defaults: UserDefaults
     private let session: URLSession
 
@@ -69,7 +69,7 @@ final class UpdateChecker: ObservableObject {
         do {
             var request = URLRequest(url: Self.releasesApi)
             request.setValue("application/vnd.github+json", forHTTPHeaderField: "Accept")
-            request.setValue("AeroSpaceSmooth/\(aeroSpaceAppVersion)", forHTTPHeaderField: "User-Agent")
+            request.setValue("TileSail/\(aeroSpaceAppVersion)", forHTTPHeaderField: "User-Agent")
             let (data, response) = try await session.data(for: request)
             guard let httpResponse = response as? HTTPURLResponse else {
                 throw UpdateCheckerError.invalidResponse
@@ -119,7 +119,7 @@ private enum UpdateCheckerError: LocalizedError {
     var errorDescription: String? {
         switch self {
             case .invalidResponse: "The update service returned an invalid response."
-            case .noPublishedReleases: "No public AeroSpaceSmooth releases are available yet."
+            case .noPublishedReleases: "No public TileSail releases are available yet."
             case .httpStatus(let status): "The update service returned HTTP \(status)."
         }
     }

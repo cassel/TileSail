@@ -1,6 +1,6 @@
-# AeroSpaceSmooth feature and Settings guide
+# TileSail feature and Settings guide
 
-AeroSpaceSmooth started as an effort to make a Mac behave more like an
+TileSail started as an effort to make a Mac behave more like an
 Omarchy/Hyprland workstation without giving up the parts of macOS that are useful
 day to day. The goal is fast keyboard navigation, predictable workspaces on each
 monitor, Dwindle-style layouts, a visible focused window, and smooth movement —
@@ -12,7 +12,7 @@ and which parts still belong to the user's local setup.
 
 ## Relationship to AeroSpace
 
-AeroSpaceSmooth is a GitHub fork of
+TileSail is an independent project derived from
 [nikitabobko/AeroSpace](https://github.com/nikitabobko/AeroSpace). The upstream
 project supplies the window tree, tiling engine, workspace emulation, command-line
 interface, hotkey system, Accessibility integration, and TOML configuration model.
@@ -70,16 +70,16 @@ The current branch was built incrementally rather than as one isolated UI patch:
 
 ## Opening Settings
 
-Start AeroSpaceSmooth and click its menu-bar icon, then choose **Settings…**.
-The window title is **AeroSpaceSmooth Settings**.
+Start TileSail and click its menu-bar icon, then choose **Settings…**.
+The window title is **TileSail Settings**.
 
 Development builds can also open Settings immediately at launch:
 
 ```sh
-open -a AeroSpaceSmooth --args --open-settings
+open -a TileSail --args --open-settings
 ```
 
-The menu bar uses one native AeroSpaceSmooth symbol on every macOS version and appears
+The menu bar uses one native TileSail symbol on every macOS version and appears
 on every menu bar macOS makes available. In **General → Menu Bar**, display placement is
 shown separately from the Content picker. Content can show only the symbol, the focused
 workspace, all active workspaces, or i3-style grouped or ordered workspace chips. Grouped
@@ -88,7 +88,7 @@ keeps visible and occupied workspaces in configured order. These choices stay ou
 status menu so its actions remain compact and predictable.
 
 The app needs macOS Accessibility permission before it can manage windows. Avoid
-running official AeroSpace and AeroSpaceSmooth at the same time: two window managers
+running official AeroSpace and TileSail at the same time: two window managers
 reacting to the same Accessibility events can cause repeated moves or apparent loops.
 
 The Settings sidebar contains seven pages:
@@ -108,20 +108,20 @@ what that group controls and the consequences of changing it.
 
 The Layouts page adapts its visual previews to the selected monitor:
 
-![Per-monitor layouts in AeroSpaceSmooth Settings](./docs/assets/aerospace-smooth-layouts.jpeg)
+![Per-monitor layouts in TileSail Settings](./docs/assets/aerospace-smooth-layouts.jpeg)
 
 Custom layouts are edited directly on an accurately proportioned display preview:
 
 ![Visual Custom Layout editor](./docs/assets/aerospace-smooth-custom-layout.jpeg)
 
-Standard AeroSpace behavior and AeroSpaceSmooth animation controls live together on
+Standard AeroSpace behavior and TileSail animation controls live together on
 the General page:
 
 ![General settings](./docs/assets/aerospace-smooth-general.jpeg)
 
 ## Layouts
 
-Layouts is the main AeroSpaceSmooth-specific page. It detects the currently connected
+Layouts is the main TileSail-specific page. It detects the currently connected
 monitors and gives each monitor an independent profile. A profile is stored by the
 Core Graphics display UUID, so a localized display-name change or screen reordering
 does not reset its layout choices. Existing name-based profiles migrate automatically.
@@ -136,7 +136,7 @@ Selecting a monitor opens its editor.
 
 ### Automatic layout
 
-**Automatic layout on this monitor** enables the AeroSpaceSmooth coordinator for
+**Automatic layout on this monitor** enables the TileSail coordinator for
 that display. When enabled, the coordinator examines the number of tiled windows in
 each workspace and applies the layout configured for that exact count.
 
@@ -288,8 +288,8 @@ which prevents shaking and repeated Accessibility traffic.
 
 ### Window-manager conflicts, updates, and workspace bar
 
-At startup AeroSpaceSmooth checks for other known window managers, including another
-AeroSpaceSmooth instance, AeroSpace, OmniWM, Amethyst, and yabai. Settings also shows
+At startup TileSail checks for other known window managers, including another
+TileSail instance, AeroSpace, OmniWM, Amethyst, and yabai. Settings also shows
 the live conflict state. The user can deliberately continue, but the default warning
 helps prevent two processes from fighting over the same windows.
 
@@ -333,7 +333,7 @@ The backing workspaces whose names start with `_smooth-` are private implementat
 details. They never become the active workspace and are excluded from the menu bar,
 Workspace Bar, Overview, relative navigation, and `list-workspaces` output.
 
-When automatic layout is disabled for a monitor, AeroSpaceSmooth records the tiling
+When automatic layout is disabled for a monitor, TileSail records the tiling
 tree's groups, orientations, order, and weights. On relaunch it restores a saved tree
 only when the same workspace, display UUID, and complete set of windows can be matched,
 so a partial startup cannot overwrite the user's current arrangement.
@@ -409,7 +409,7 @@ The Quick Tools card and menu-bar menu open two native navigation surfaces:
 - `command-palette` searches common layout, focus, move, workspace, scratchpad, reload,
   and enable actions.
 
-Both names are regular AeroSpaceSmooth commands and can be entered directly in the
+Both names are regular TileSail commands and can be entered directly in the
 visual shortcut editor, for example `alt-space = 'command-palette'`.
 
 ### Example Omarchy-style bindings
@@ -448,7 +448,7 @@ Do not keep Option and Shift held for the second key. Both windows must belong t
 same AeroSpace workspace. `join-with` groups tree nodes; it does not create native
 macOS tabs.
 
-AeroSpaceSmooth preserves a successful manual grouping through the subsequent tree
+TileSail preserves a successful manual grouping through the subsequent tree
 normalization and automatic-layout pass. The grouping remains stable while workspace
 window membership is unchanged. Opening, closing, or moving a window changes the count,
 so the configured layout for the new count becomes authoritative again.
@@ -480,7 +480,7 @@ tree when its shape is still valid. This reduces robotic movement and prevents f
 loops.
 
 Some applications report minimum window sizes larger than their assigned tile. macOS
-may clamp the individual physical window, but AeroSpaceSmooth keeps the layout style the
+may clamp the individual physical window, but TileSail keeps the layout style the
 user selected instead of silently switching the entire workspace to Grid.
 
 ## Multi-monitor model
@@ -513,7 +513,7 @@ Included in this repository:
 - Stable monitor identity, constraint-aware animation, scratchpads, manual tree
   restoration, the workspace bar, Overview, Command Palette, conflict detection,
   and update checks.
-- The `AeroSpaceSmooth` development app name.
+- The `TileSail` development app name.
 
 Normally local to each user's Mac:
 
@@ -545,7 +545,7 @@ xcodebuild \
 The resulting app is located at:
 
 ```text
-xcode/.xcode-build/Build/Products/Debug/AeroSpaceSmooth.app
+xcode/.xcode-build/Build/Products/Debug/TileSail.app
 ```
 
 For development, grant Accessibility permission to the exact app bundle you run. Replacing
@@ -594,8 +594,17 @@ The main implementation entry points are:
 - macOS Accessibility behavior and application minimum sizes can still limit the exact
   final frame of an individual window.
 
+## Migration from AeroSpaceSmooth
+
+TileSail keeps existing TOML configuration paths and stored preference keys.
+The Debug bundle ID remains `bobko.aerospace.debug` to preserve local Accessibility
+permission and monitor profiles. Release builds use `us.cassel.tilesail`.
+Both build configurations are named TileSail.app. Stop the previous app before
+launching TileSail. Update your startup agent to the new installed app path.
+The `tilesail` CLI and compatibility `aerospace` CLI accept the same commands.
+
 ## Credits
 
-AeroSpaceSmooth exists because of the architecture and years of work in
+TileSail exists because of the architecture and years of work in
 [AeroSpace](https://github.com/nikitabobko/AeroSpace). Please use the upstream project
 for its official releases, guide, command reference, community, and sponsorship links.

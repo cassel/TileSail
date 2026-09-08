@@ -13,15 +13,15 @@ final class UpdateCheckerTest: XCTestCase {
         let release = try UpdateChecker.decodeRelease(Data("""
             {
               "tag_name": "v1.2.3",
-              "name": "AeroSpaceSmooth 1.2.3",
-              "html_url": "https://github.com/cassel/AeroSpaceSmooth/releases/tag/v1.2.3",
+              "name": "TileSail 1.2.3",
+              "html_url": "https://github.com/cassel/TileSail/releases/tag/v1.2.3",
               "published_at": "2026-09-04T12:00:00Z"
             }
             """.utf8))
 
         assertEquals(release.version, "v1.2.3")
-        assertEquals(release.title, "AeroSpaceSmooth 1.2.3")
-        assertEquals(release.pageUrl.absoluteString, "https://github.com/cassel/AeroSpaceSmooth/releases/tag/v1.2.3")
+        assertEquals(release.title, "TileSail 1.2.3")
+        assertEquals(release.pageUrl.absoluteString, "https://github.com/cassel/TileSail/releases/tag/v1.2.3")
         XCTAssertNotNil(release.publishedAt)
     }
 }

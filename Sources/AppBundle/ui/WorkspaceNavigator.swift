@@ -213,14 +213,14 @@ private final class WorkspaceNavigatorModel: ObservableObject {
                 action: .showOverview,
             ),
             commandItem("balance", "Balance Window Sizes", "Equalize weights in the current workspace", "scale.3d", ["balance-sizes"]),
-            commandItem("fullscreen", "Toggle Fullscreen", "AeroSpace fullscreen for the focused window", "arrow.up.left.and.arrow.down.right", ["fullscreen"]),
+            commandItem("fullscreen", "Toggle Fullscreen", "TileSail fullscreen for the focused window", "arrow.up.left.and.arrow.down.right", ["fullscreen"]),
             commandItem("floating", "Toggle Floating / Tiling", "Change how the focused window participates in layout", "macwindow.on.rectangle", ["layout", "floating", "tiling"]),
             commandItem("tiles", "Toggle Tiles / Accordion", "Switch the current container layout", "rectangle.split.2x1", ["layout", "tiles", "accordion"]),
             commandItem("orientation", "Toggle Orientation", "Switch between horizontal and vertical", "arrow.left.and.right.righttriangle.left.righttriangle.right", ["layout", "horizontal", "vertical"]),
             commandItem("workspace-next", "Next Workspace", "Navigate on the focused monitor", "arrow.right.circle", ["workspace", "--wrap-around", "next"]),
             commandItem("workspace-prev", "Previous Workspace", "Navigate on the focused monitor", "arrow.left.circle", ["workspace", "--wrap-around", "prev"]),
             commandItem("reload", "Reload Configuration", "Read the active TOML file again", "arrow.clockwise", ["reload-config"]),
-            commandItem("enable", "Toggle Window Management", "Pause or resume AeroSpaceSmooth", "pause.circle", ["enable", "toggle"]),
+            commandItem("enable", "Toggle Window Management", "Pause or resume TileSail", "pause.circle", ["enable", "toggle"]),
         ]
         for direction in ["left", "down", "up", "right"] {
             items.append(commandItem(
@@ -323,7 +323,7 @@ final class WorkspaceNavigatorController {
     private func makeWindowController() -> NSWindowController {
         let content = NSHostingController(rootView: WorkspaceNavigatorView(model: model))
         let window = WorkspaceNavigatorPanel(contentViewController: content)
-        window.title = "AeroSpaceSmooth Navigator"
+        window.title = "TileSail Navigator"
         window.titleVisibility = .hidden
         window.titlebarAppearsTransparent = true
         window.styleMask = [.titled, .closable, .resizable, .fullSizeContentView]

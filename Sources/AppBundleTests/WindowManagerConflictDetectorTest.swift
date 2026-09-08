@@ -6,9 +6,9 @@ final class WindowManagerConflictDetectorTest: XCTestCase {
         let candidates = [
             RunningWindowManagerCandidate(
                 processIdentifier: 10,
-                name: "AeroSpaceSmooth",
+                name: "TileSail",
                 bundleIdentifier: "bobko.aerospace.debug",
-                executableName: "AeroSpaceSmooth",
+                executableName: "TileSail",
             ),
             RunningWindowManagerCandidate(
                 processIdentifier: 11,
