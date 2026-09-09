@@ -1,6 +1,6 @@
 # TileSail
 
-<img src="./resources/Assets.xcassets/AppIcon.appiconset/icon.png" width="40%" align="right">
+<img src="./resources/Assets.xcassets/AppIcon.appiconset/tilesail-512x512@2x.png" width="40%" align="right">
 
 TileSail is an independent macOS window manager derived from
 [nikitabobko/AeroSpace](https://github.com/nikitabobko/AeroSpace) focused on a
