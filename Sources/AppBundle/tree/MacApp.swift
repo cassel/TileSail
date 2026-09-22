@@ -221,6 +221,12 @@ final class MacApp: AbstractApp {
         } ?? .window
     }
 
+    func isWorkspaceMemoryWindow(_ windowId: UInt32, _ cm: CancellationMode) async throws -> Bool {
+        try await withWindow(windowId, cm) { [appId] window, _ in
+            window.isWorkspaceMemoryWindow(appId)
+        } == true
+    }
+
     func isDialogHeuristic(_ windowId: UInt32, _ windowLevel: MacOsWindowLevel?, _ cm: CancellationMode) async throws -> Bool {
         try await withWindow(windowId, cm) { [appId] window, job in
             window.isDialogHeuristic(appId, windowLevel)

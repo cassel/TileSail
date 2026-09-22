@@ -48,6 +48,7 @@ func runHeavyCompleteRefreshSession(
             await reconcileSmoothWorkspaceLayoutsRespectingWindowConstraints()
             if shouldLayoutWorkspaces { try await layoutWorkspaces() }
             await PersistentManualLayoutStore.shared.captureIfReady()
+            AppWorkspaceMemory.shared.capture(windows: MacWindow.allWindows, focused: focus.windowOrNil)
         }
     }
     switch res {
@@ -78,6 +79,7 @@ func runLightSession<T>(
         await refreshModel_nonCancellable()
 
         let focusAfter = focus.windowOrNil
+        AppWorkspaceMemory.shared.capture(windows: MacWindow.allWindows, focused: focusAfter)
 
         updateTrayText()
         SecureInputPanel.shared.refresh()

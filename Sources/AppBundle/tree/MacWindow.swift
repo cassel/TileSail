@@ -60,11 +60,22 @@ final class MacWindow: Window {
         // atomic synchronous section
         if let existing = allWindowsMap[windowId] { return existing }
         let window = MacWindow(windowId, macApp, lastFloatingSize: rect?.size, parent: data.parent, adaptiveWeight: data.adaptiveWeight, index: data.index)
+        // Refreshes may interleave at AX awaits. Do not learn the temporary
+        // current-workspace placement before restoration has completed.
+        AppWorkspaceMemory.shared.beginRegistration(window)
+        defer { AppWorkspaceMemory.shared.endRegistration(window) }
         allWindowsMap[windowId] = window
 
-        try await debugWindowsIfRecording(window, .cancellable)
+        try await debugWindowsIfRecording(window, .nonCancellable)
+        // Dialogs and popups belong with their parent, not the app's saved workspace.
+        let remembersWorkspace = (try? await macApp.isWorkspaceMemoryWindow(windowId, .nonCancellable)) ?? false
+        AppWorkspaceMemory.shared.setEligible(window, remembersWorkspace)
         if try await !restoreClosedWindowsCacheIfNeeded(newlyDetectedWindow: window) {
+            let restored = AppWorkspaceMemory.shared.restore(window, duringStartup: isStartup)
             await tryOnWindowDetected(window)
+            if restored, NSWorkspace.shared.frontmostApplication?.processIdentifier == macApp.pid {
+                _ = window.focusWindow()
+            }
         }
         return window
     }

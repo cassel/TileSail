@@ -111,6 +111,7 @@ private enum SmoothSettingsSection: String, CaseIterable, Identifiable {
 private struct SmoothLayoutSettingsView: View {
     @StateObject private var configSettings = VisualConfigSettingsStore()
     @ObservedObject private var conflictMonitor = WindowManagerConflictMonitor.shared
+    @ObservedObject private var appWorkspaces = AppWorkspaceMemory.shared
     @ObservedObject private var manualLayouts = PersistentManualLayoutStore.shared
     @ObservedObject private var updateChecker = UpdateChecker.shared
     @ObservedObject private var workspaceBar = WorkspaceBarSettings.shared
@@ -389,6 +390,23 @@ private struct SmoothLayoutSettingsView: View {
                     }
                 }
                 .onAppear { scratchpads.refreshWindowItems(force: true) }
+            }
+
+            SettingsCard(
+                "App Workspaces",
+                systemImage: "arrow.uturn.backward.square",
+                help: "Remember each app's last used workspace. Reopening an app returns it there and takes you to it. Background apps do not switch your workspace. Explicit app rules take priority.",
+            ) {
+                Toggle(
+                    "Remember where apps open",
+                    isOn: Binding(
+                        get: { appWorkspaces.isEnabled },
+                        set: { appWorkspaces.setEnabled($0) },
+                    ),
+                )
+                Text("Move an app to another workspace to update its saved location. For apps with several windows, the last used or moved window determines the location.")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
             }
 
             SettingsCard(

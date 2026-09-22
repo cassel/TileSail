@@ -17,6 +17,13 @@ enum AxUiElementWindowType: String {
 
 // Covered by tests in ./axDumps in the repo root
 extension AxUiElementMock {
+    // Floating eligibility also includes normal fixed-size apps such as Calculator.
+    // Workspace memory must distinguish actual dialogs from those normal windows.
+    func isWorkspaceMemoryWindow(_ id: KnownBundleId?) -> Bool {
+        let subrole = get(Ax.subroleAttr)
+        return subrole == kAXStandardWindowSubrole || (id == .qutebrowser && subrole == kAXDialogSubrole)
+    }
+
     // 'isDialogHeuristic' function name is referenced in the guide
     func isDialogHeuristic(
         _ id: KnownBundleId?,

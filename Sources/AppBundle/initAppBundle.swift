@@ -36,6 +36,7 @@ import Foundation
         try await runLightSession(.startup, .forceRun) {
             smartLayoutAtStartup()
             await PersistentManualLayoutStore.shared.restoreAfterInitialRefresh()
+            AppWorkspaceMemory.shared.start(windows: MacWindow.allWindows, focused: focus.windowOrNil)
             _ = await config.afterStartupCommand.run(.defaultEnv, .emptyStdin)
         }
         await UpdateChecker.shared.checkAutomaticallyIfNeeded()
