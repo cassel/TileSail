@@ -3,6 +3,8 @@ import Common
 
 @MainActor private var workspaceNameToWorkspace: [String: Workspace] = [:]
 
+@MainActor private var screenPointToMonitorIdentity: [CGPoint: String] = [:]
+
 @MainActor private var screenPointToPrevVisibleWorkspace: [CGPoint: String] = [:]
 @MainActor private var screenPointToVisibleWorkspace: [CGPoint: Workspace] = [:]
 @MainActor private var visibleWorkspaceToScreenPoint: [Workspace: CGPoint] = [:]
@@ -133,6 +135,7 @@ extension Workspace {
 extension MonitorInfo {
     @MainActor
     var activeWorkspace: Workspace {
+        gcMonitors()
         if let existing = screenPointToVisibleWorkspace[rect.topLeftCorner] {
             return existing
         }
@@ -151,7 +154,8 @@ extension MonitorInfo {
 
 @MainActor
 func gcMonitors() {
-    if screenPointToVisibleWorkspace.count != monitorInfos.count {
+    let current = Dictionary(monitorInfos.map { ($0.rect.topLeftCorner, $0.stableIdentifier) }, uniquingKeysWith: { first, _ in first })
+    if screenPointToMonitorIdentity != current || screenPointToVisibleWorkspace.count != current.count {
         rearrangeWorkspacesOnMonitors()
     }
 }
@@ -181,19 +185,16 @@ extension CGPoint {
 
 @MainActor
 private func rearrangeWorkspacesOnMonitors() {
-    let newScreens = monitorInfos.map(\.rect.topLeftCorner)
-    var newScreenToOldScreenMapping: [CGPoint: CGPoint] = [:]
-    for (oldScreen, _) in screenPointToVisibleWorkspace {
-        guard let newScreen = newScreens.minBy({ ($0 - oldScreen).vectorLength }) else { continue }
-        if let prevOldScreen = newScreenToOldScreenMapping[newScreen] {
-            if (prevOldScreen - newScreen).vectorLength <= (oldScreen - newScreen).vectorLength {
-                // newScreen has already been assigned to a closer oldScreen.
-                continue
-            }
-        }
-        newScreenToOldScreenMapping[newScreen] = oldScreen
-    }
-
+    let monitors = monitorInfos
+    guard !monitors.isEmpty else { return }
+    let newScreens = monitors.map(\.rect.topLeftCorner)
+    let newIdentities = Dictionary(monitors.map { ($0.rect.topLeftCorner, $0.stableIdentifier) }, uniquingKeysWith: { first, _ in first })
+    let newScreenToOldScreenMapping = matchMonitorOrigins(
+        oldIdentities: screenPointToMonitorIdentity,
+        newIdentities: newIdentities,
+        occupied: Set(screenPointToVisibleWorkspace.keys),
+    )
+    screenPointToMonitorIdentity = Dictionary(monitors.map { ($0.rect.topLeftCorner, $0.stableIdentifier) }, uniquingKeysWith: { first, _ in first })
     let oldScreenPointToVisibleWorkspace = screenPointToVisibleWorkspace
     screenPointToVisibleWorkspace = [:]
     visibleWorkspaceToScreenPoint = [:]
@@ -216,4 +217,36 @@ private func isValidAssignment(workspace: Workspace, screen: CGPoint) -> Bool {
         case let forceAssigned? where forceAssigned.rect.topLeftCorner != screen: false
         default: true
     }
+}
+
+// Kept pure so display-origin swaps can be tested without moving physical displays.
+func matchMonitorOrigins(
+    oldIdentities: [CGPoint: String],
+    newIdentities: [CGPoint: String],
+    occupied: Set<CGPoint>,
+) -> [CGPoint: CGPoint] {
+    let newScreens = Array(newIdentities.keys)
+    var newScreenToOldScreenMapping: [CGPoint: CGPoint] = [:]
+    // Hardware identity wins over proximity when macOS changes display origins.
+    for (point, identity) in newIdentities {
+        if let oldPoint = oldIdentities.first(where: { $0.value == identity })?.key,
+           occupied.contains(oldPoint)
+        {
+            newScreenToOldScreenMapping[point] = oldPoint
+        }
+    }
+    let identityMatchedScreens = Set(newScreenToOldScreenMapping.keys)
+    let identityMatchedOldScreens = Set(newScreenToOldScreenMapping.values)
+    for oldScreen in occupied where !identityMatchedOldScreens.contains(oldScreen) {
+        guard let newScreen = newScreens.filter({ !identityMatchedScreens.contains($0) }).minBy({ ($0 - oldScreen).vectorLength }) else { continue }
+        if let prevOldScreen = newScreenToOldScreenMapping[newScreen] {
+            if (prevOldScreen - newScreen).vectorLength <= (oldScreen - newScreen).vectorLength {
+                // newScreen has already been assigned to a closer oldScreen.
+                continue
+            }
+        }
+        newScreenToOldScreenMapping[newScreen] = oldScreen
+    }
+
+    return newScreenToOldScreenMapping
 }

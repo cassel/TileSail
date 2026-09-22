@@ -7,6 +7,7 @@ struct PersistentWindowIdentity: Codable, Hashable, Sendable {
     let title: String
     let titleOccurrence: Int
     let applicationOccurrence: Int
+    var nativeWindowId: UInt32? = nil
 }
 
 struct PersistentLayoutNode: Codable, Equatable, Sendable {
@@ -31,6 +32,8 @@ struct PersistentWorkspaceLayout: Codable, Equatable, Sendable {
     let workspaceName: String
     let monitorIdentifier: String
     let root: PersistentLayoutNode
+    var wasVisible: Bool? = nil
+    var automaticProfile: SmoothMonitorLayoutProfile? = nil
 }
 
 @MainActor
@@ -66,6 +69,8 @@ final class PersistentManualLayoutStore: ObservableObject {
     func restoreAfterInitialRefresh() async {
         defer { isReadyToCapture = true }
         guard isEnabled else { return }
+        await restoreWindowPlacement()
+        reconcileSmoothWorkspaceLayouts()
         await restore()
     }
 
@@ -80,12 +85,10 @@ final class PersistentManualLayoutStore: ObservableObject {
 
         for workspace in Workspace.all where workspace.isUserFacing {
             let monitor = workspace.workspaceMonitor
-            let automaticLayoutEnabled = SmoothLayoutSettingsStore.shared.profile(for: monitor).enabled
+            let profile = SmoothLayoutSettingsStore.shared.profile(for: monitor)
             let windows = workspace.rootTilingContainer.allLeafWindowsRecursive
-            guard !automaticLayoutEnabled, !windows.isEmpty else {
-                updated.removeValue(forKey: workspace.name)
-                continue
-            }
+            // Empty discovery during shutdown must not erase the last usable layout.
+            guard !windows.isEmpty else { continue }
 
             let identities = await windowIdentities(windows)
             let root = captureNode(workspace.rootTilingContainer, weight: 1, identities: identities)
@@ -93,6 +96,8 @@ final class PersistentManualLayoutStore: ObservableObject {
                 workspaceName: workspace.name,
                 monitorIdentifier: monitor.stableIdentifier,
                 root: root,
+                wasVisible: workspace.isVisible,
+                automaticProfile: profile.enabled ? profile : nil,
             )
         }
 
@@ -111,7 +116,9 @@ final class PersistentManualLayoutStore: ObservableObject {
             guard saved.workspaceName == workspace.name,
                   saved.monitorIdentifier == monitor.stableIdentifier
             else { continue }
-            guard !SmoothLayoutSettingsStore.shared.profile(for: monitor).enabled else { continue }
+            let profile = SmoothLayoutSettingsStore.shared.profile(for: monitor)
+            // A changed preset is intentional and takes precedence over the saved tree.
+            guard saved.automaticProfile == (profile.enabled ? profile : nil) else { continue }
 
             let windows = workspace.rootTilingContainer.allLeafWindowsRecursive
             guard windows.count == saved.root.windowIdentities.count, !windows.isEmpty else { continue }
@@ -123,6 +130,42 @@ final class PersistentManualLayoutStore: ObservableObject {
             ) else { continue }
 
             restorePersistentLayout(saved.root, in: workspace, windows: matchedWindows)
+            preserveCurrentSmoothWorkspaceTreeAfterUserCommand(workspace)
+        }
+    }
+
+    // Startup discovery puts every window on a monitor into its active workspace.
+    // Recover workspace membership before attempting to reconstruct individual trees.
+    private func restoreWindowPlacement() async {
+        let windows = Workspace.all.flatMap { $0.rootTilingContainer.allLeafWindowsRecursive }
+        let identities = await windowIdentities(windows)
+        let savedIdentities = layouts.values.flatMap { $0.root.windowIdentities }
+        var used: Set<UInt32> = []
+        for saved in layouts.values.sorted(by: { $0.workspaceName < $1.workspaceName }) {
+            guard let monitor = monitorInfos.first(where: { $0.stableIdentifier == saved.monitorIdentifier }) else { continue }
+            let profile = SmoothLayoutSettingsStore.shared.profile(for: monitor)
+            guard saved.automaticProfile == (profile.enabled ? profile : nil) else { continue }
+            let workspace = Workspace.get(byName: saved.workspaceName)
+            if saved.wasVisible == true {
+                guard monitor.setActiveWorkspace(workspace) else { continue }
+            } else {
+                guard workspace.assign(to: monitor) else { continue }
+            }
+            for identity in saved.root.windowIdentities {
+                let candidates = windows.filter { window in
+                    guard !used.contains(window.windowId), let current = identities[window.windowId] else { return false }
+                    return current.applicationIdentifier == identity.applicationIdentifier && current.title == identity.title
+                }
+                let sameNative = candidates.first { $0.windowId == identity.nativeWindowId }
+                let uniqueTitle = !identity.title.isEmpty && candidates.count == 1 && savedIdentities.filter {
+                    $0.applicationIdentifier == identity.applicationIdentifier && $0.title == identity.title
+                }.count == 1
+                guard let window = sameNative ?? (uniqueTitle ? candidates.first : nil) else { continue }
+                used.insert(window.windowId)
+                if window.nodeWorkspace != workspace {
+                    window.bind(to: workspace.rootTilingContainer, adaptiveWeight: 1, index: INDEX_BIND_LAST)
+                }
+            }
         }
     }
 
@@ -153,6 +196,7 @@ private func windowIdentities(_ windows: [Window]) async -> [UInt32: PersistentW
             title: title,
             titleOccurrence: titleCounts[titleKey, default: 0],
             applicationOccurrence: applicationCounts[applicationIdentifier, default: 0],
+            nativeWindowId: window.windowId,
         )
         titleCounts[titleKey, default: 0] += 1
         applicationCounts[applicationIdentifier, default: 0] += 1
@@ -216,6 +260,11 @@ private func matchWindows(
     var usedWindowIds: Set<UInt32> = []
     var result: [PersistentWindowIdentity: Window] = [:]
     for identity in savedIdentities {
+        guard let window = exact[persistentExactWindowKey(identity)],
+              usedWindowIds.insert(window.windowId).inserted else { continue }
+        result[identity] = window
+    }
+    for identity in savedIdentities where result[identity] == nil {
         let exactWindow = exact[persistentExactWindowKey(identity)].flatMap { window in
             usedWindowIds.contains(window.windowId) ? nil : window
         }

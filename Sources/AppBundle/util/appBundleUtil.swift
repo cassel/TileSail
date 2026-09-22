@@ -26,18 +26,15 @@ func initTerminationHandler() {
 private struct AppServerTerminationHandler: TerminationHandler {
     @MainActor
     func beforeTermination() {
-        // Make all windows fullscreen before Quit
-        for window in MacWindow.allWindowsMap.values {
-            // makeAllWindowsVisibleAndRestoreSize may be invoked when something went wrong (e.g. some windows are unbound)
-            // that's why it's not allowed to use `.parent` call in here
-            let monitor = window.macApp.getAxRectForTermination(window.windowId)?.center.monitorApproximation ?? mainMonitorInfo
-            let monitorVisibleRect = monitor.visibleRect
-            let windowSize = window.lastFloatingSize ?? CGSize(width: monitorVisibleRect.width, height: monitorVisibleRect.height)
-            let point = CGPoint(
-                x: (monitorVisibleRect.width - windowSize.width) / 2,
-                y: (monitorVisibleRect.height - windowSize.height) / 2,
-            )
-            window.macApp.setAxFrameForTermination(window.windowId, point, windowSize)
+        // Leave visible windows exactly where the user put them. Only recover
+        // windows hidden by TileSail, on their own monitor rather than at (0, 0).
+        for window in MacWindow.allWindowsMap.values where window.isHiddenInCorner {
+            let current = window.macApp.getAxRectForTermination(window.windowId)
+            let monitor = window.nodeWorkspace?.workspaceMonitor ?? current?.center.monitorApproximation ?? mainMonitorInfo
+            let visible = monitor.visibleRect
+            let size = current?.size ?? window.lastFloatingSize ?? visible.size
+            let point = terminationWindowOrigin(visibleRect: visible, windowSize: size)
+            window.macApp.setAxFrameForTermination(window.windowId, point, nil)
         }
         if isDebug {
             let semaphore = DispatchSemaphore(value: 0)
@@ -146,4 +143,11 @@ func checkCancellation(_ cm: CancellationMode = .cancellable) throws(Cancellatio
 public enum CancellationMode: Equatable, Sendable {
     case cancellable
     case nonCancellable
+}
+
+func terminationWindowOrigin(visibleRect: Rect, windowSize: CGSize) -> CGPoint {
+    CGPoint(
+        x: visibleRect.minX + max(0, (visibleRect.width - windowSize.width) / 2),
+        y: visibleRect.minY + max(0, (visibleRect.height - windowSize.height) / 2),
+    )
 }

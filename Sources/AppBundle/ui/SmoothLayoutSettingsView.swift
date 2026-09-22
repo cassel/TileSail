@@ -392,12 +392,12 @@ private struct SmoothLayoutSettingsView: View {
             }
 
             SettingsCard(
-                "Restore Manual Layouts",
+                "Restore Window Layouts",
                 systemImage: "arrow.counterclockwise.square",
-                help: "When automatic layout is disabled for a monitor, TileSail remembers that workspace's tiling groups, order and proportions and restores them after relaunch.",
+                help: "TileSail automatically remembers tiling groups, order and proportions and restores them after relaunch when the windows and layout preset still match.",
             ) {
                 Toggle(
-                    "Remember layouts while automatic layout is off",
+                    "Remember window layouts automatically",
                     isOn: Binding(
                         get: { manualLayouts.isEnabled },
                         set: { manualLayouts.setEnabled($0) },
