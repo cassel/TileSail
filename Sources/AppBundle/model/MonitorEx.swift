@@ -6,19 +6,29 @@ extension MonitorInfo {
     var visibleRectPaddedByOuterGaps: Rect {
         let topLeft = visibleRect.topLeftCorner
         let gaps = ResolvedGaps(gaps: config.gaps, monitor: self)
-        let barInset: CGFloat
-        if !isUnitTest, WorkspaceBarSettings.shared.isEnabled, TrayMenuModel.shared.isEnabled,
-           let screen = NSScreen.screens.getOrNil(atIndex: monitorAppKitNsScreenScreensId - 1) {
-            barInset = screen.workspaceBarGeometry().reservedTopInset
-        } else {
-            barInset = 0
-        }
+        let barInset = workspaceBarTopInset
         let topGap = max(gaps.outer.top.toDouble(), barInset)
         return Rect(
             topLeftX: topLeft.x + gaps.outer.left.toDouble(),
             topLeftY: topLeft.y + topGap,
             width: visibleRect.width - gaps.outer.left.toDouble() - gaps.outer.right.toDouble(),
             height: visibleRect.height - topGap - gaps.outer.bottom.toDouble(),
+        )
+    }
+
+    @MainActor
+    private var workspaceBarTopInset: CGFloat {
+        guard !isUnitTest, WorkspaceBarSettings.shared.isEnabled, TrayMenuModel.shared.isEnabled else { return 0 }
+        return WorkspaceBarController.shared.reservedTopInset(for: self)
+    }
+
+    /// Expanded TileSail windows still leave room for the workspace switcher.
+    @MainActor
+    var visibleRectAvoidingWorkspaceBar: Rect {
+        let inset = workspaceBarTopInset
+        return Rect(
+            topLeftX: visibleRect.topLeftX, topLeftY: visibleRect.topLeftY + inset,
+            width: visibleRect.width, height: visibleRect.height - inset,
         )
     }
 

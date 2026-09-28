@@ -100,7 +100,7 @@ extension Window {
     @MainActor
     fileprivate func layoutFullscreen(_ context: LayoutContext) {
         let monitorRect = noOuterGapsInFullscreen
-            ? context.workspace.workspaceMonitor.visibleRect
+            ? context.workspace.workspaceMonitor.visibleRectAvoidingWorkspaceBar
             : context.workspace.workspaceMonitor.visibleRectPaddedByOuterGaps
         context.transaction.setFrame(self, monitorRect.topLeftCorner, CGSize(width: monitorRect.width, height: monitorRect.height))
     }
