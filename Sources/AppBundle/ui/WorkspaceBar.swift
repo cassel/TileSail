@@ -24,12 +24,48 @@ final class WorkspaceBarSettings: ObservableObject {
         isEnabled = enabled
         defaults.set(enabled, forKey: Self.enabledKey)
         WorkspaceBarController.shared.refresh()
+        guard !isUnitTest, let token = RunSessionGuard.isServerEnabled else { return }
+        Task.startUnstructured { @MainActor in
+            try await runLightSession(.menuBarButton, token) {}
+        }
     }
 
     func setShowsEmptyWorkspaces(_ show: Bool) {
         showsEmptyWorkspaces = show
         defaults.set(show, forKey: Self.showEmptyKey)
         WorkspaceBarController.shared.refresh()
+    }
+}
+
+/// Shared geometry keeps the panel and the tiling exclusion area in agreement.
+struct WorkspaceBarGeometry {
+    static let height: CGFloat = 20
+    static let dotPitch: CGFloat = 16
+    let frame: NSRect
+    let reservedTopInset: CGFloat
+
+    init(screenFrame: NSRect, visibleFrame: NSRect, safeAreaTop: CGFloat, itemCount: Int) {
+        let topStrip = screenFrame.maxY - visibleFrame.maxY
+        let fitsMenuBar = safeAreaTop == 0 && topStrip >= Self.height
+        let width = min(max(0, visibleFrame.width - 16), 30 + CGFloat(itemCount) * Self.dotPitch)
+        reservedTopInset = fitsMenuBar ? 0 : Self.height + 4
+        frame = NSRect(
+            x: visibleFrame.midX - width / 2,
+            y: fitsMenuBar
+                ? visibleFrame.maxY + (topStrip - Self.height) / 2
+                : visibleFrame.maxY - Self.height - 2,
+            width: width,
+            height: Self.height,
+        )
+    }
+}
+
+extension NSScreen {
+    func workspaceBarGeometry(itemCount: Int = 0) -> WorkspaceBarGeometry {
+        WorkspaceBarGeometry(
+            screenFrame: frame, visibleFrame: visibleFrame,
+            safeAreaTop: safeAreaInsets.top, itemCount: itemCount,
+        )
     }
 }
 
@@ -94,8 +130,16 @@ final class WorkspaceBarController {
             let panel = panels[monitor.stableIdentifier] ?? makePanel()
             panels[monitor.stableIdentifier] = panel
             panel.contentViewController = NSHostingController(rootView: WorkspaceBarView(snapshot: snapshot))
-            position(panel, on: screen, itemCount: snapshot.items.count)
-            panel.orderFrontRegardless()
+            let geometry = screen.workspaceBarGeometry(itemCount: snapshot.items.count)
+            panel.level = geometry.reservedTopInset == 0 ? .statusBar : .floating
+            panel.setFrame(geometry.frame, display: true)
+            // Fullscreen windows do not respect outer gaps; keep their controls clear.
+            if snapshot.items.isEmpty || (geometry.reservedTopInset > 0 &&
+                snapshot.items.contains(where: { $0.isActive && $0.hasFullscreenWindow })) {
+                panel.orderOut(nil)
+            } else {
+                panel.orderFrontRegardless()
+            }
         }
     }
 
@@ -108,27 +152,13 @@ final class WorkspaceBarController {
         )
         panel.backgroundColor = .clear
         panel.isOpaque = false
-        panel.hasShadow = true
+        panel.hasShadow = false
         panel.level = .floating
         panel.hidesOnDeactivate = false
         panel.becomesKeyOnlyIfNeeded = true
         panel.isReleasedWhenClosed = false
         panel.collectionBehavior = [.canJoinAllSpaces, .stationary, .fullScreenAuxiliary]
         return panel
-    }
-
-    private func position(_ panel: NSPanel, on screen: NSScreen, itemCount: Int) {
-        let width = min(screen.visibleFrame.width - 32, max(180, CGFloat(itemCount) * 52 + 36))
-        let height: CGFloat = 36
-        panel.setFrame(
-            NSRect(
-                x: screen.visibleFrame.midX - width / 2,
-                y: screen.visibleFrame.maxY - height - 8,
-                width: width,
-                height: height,
-            ),
-            display: true,
-        )
     }
 
     private func hideAll() {
@@ -141,38 +171,42 @@ private struct WorkspaceBarView: View {
     let snapshot: WorkspaceBarSnapshot
 
     var body: some View {
-        HStack(spacing: 5) {
+        HStack(spacing: 0) {
             Image(systemName: "display")
+                .font(.system(size: 11))
                 .foregroundStyle(.secondary)
+                .frame(width: 22)
                 .help(snapshot.monitorName)
-            ForEach(snapshot.items) { item in
-                Button {
-                    focusWorkspace(named: item.name)
-                } label: {
-                    HStack(spacing: 3) {
-                        if item.isFocused {
-                            Circle().fill(.tint).frame(width: 5, height: 5)
+            ScrollView(.horizontal, showsIndicators: false) {
+                HStack(spacing: 0) {
+                    ForEach(snapshot.items) { item in
+                        Button {
+                            focusWorkspace(named: item.name)
+                        } label: {
+                            Circle()
+                                .fill(item.isActive ? Color.accentColor : Color.secondary.opacity(0.55))
+                                .frame(width: item.isActive ? 7 : 5, height: item.isActive ? 7 : 5)
+                                .overlay {
+                                    if item.isFocused {
+                                        Circle().stroke(Color.primary.opacity(0.75), lineWidth: 1)
+                                            .frame(width: 10, height: 10)
+                                    }
+                                }
+                                .frame(width: WorkspaceBarGeometry.dotPitch, height: WorkspaceBarGeometry.height)
+                                .contentShape(Rectangle())
                         }
-                        Text(item.name)
-                            .font(.system(.caption, design: .rounded, weight: item.isActive ? .bold : .medium))
-                        if item.hasFullscreenWindow {
-                            Image(systemName: "arrow.up.left.and.arrow.down.right")
-                                .font(.system(size: 8, weight: .semibold))
-                        }
+                        .buttonStyle(.plain)
+                        .accessibilityLabel("Workspace \(item.name), \(item.windowCount) windows")
+                        .accessibilityValue(item.isActive ? "Active" : "Inactive")
+                        .help("\(item.name) · \(item.windowCount) windows")
                     }
-                    .padding(.horizontal, 7)
-                    .frame(height: 26)
-                    .background(item.isActive ? Color.accentColor.opacity(0.24) : Color.clear)
-                    .clipShape(RoundedRectangle(cornerRadius: 7))
                 }
-                .buttonStyle(.plain)
-                .help("\(item.name) · \(item.windowCount) windows")
             }
         }
-        .padding(.horizontal, 9)
+        .padding(.horizontal, 4)
         .frame(maxWidth: .infinity, maxHeight: .infinity)
-        .background(.ultraThinMaterial, in: RoundedRectangle(cornerRadius: 11))
-        .overlay(RoundedRectangle(cornerRadius: 11).stroke(.white.opacity(0.12)))
+        .background(.ultraThinMaterial, in: Capsule())
+        .overlay(Capsule().stroke(.white.opacity(0.12)))
     }
 
     private func focusWorkspace(named name: String) {
