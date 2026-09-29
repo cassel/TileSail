@@ -212,7 +212,7 @@ final class MacWindow: Window {
                 guard let size = try await getAxSize(.cancellable) else { return }
                 p = adaptiveHideOrigin(
                     monitorRect: nodeMonitor.visibleRect,
-                    screenRects: monitorInfos.map(\.visibleRect),
+                    screenRects: monitorInfos.map(\.rect),
                     windowSize: size,
                     edgeInset: macApp.appId == .zoom ? 0 : 1,
                 )
@@ -390,8 +390,24 @@ func adaptiveHideOrigin(
         monitorRect.bottomLeftCorner + CGPoint(x: -windowSize.width + edgeInset, y: -edgeInset),
         bottomEdgeHideOrigin(monitorRect: monitorRect, windowSize: windowSize, edgeInset: edgeInset),
     ]
+    // AppKit can pull an off-screen title bar upward (and shrink the window)
+    // onto a neighboring display, even when the requested frame misses it by a
+    // few pixels. Repeated AX writes then fight that correction indefinitely.
+    // Score this recovery strip on OTHER displays before raw visible area. Use
+    // full screen bounds: Dock/menu-bar exclusions are not safe hiding space.
+    let neighboringScreens = screenRects.filter { !$0.contains(monitorRect.center) }
+    func recoveryArea(_ origin: CGPoint) -> CGFloat {
+        visibleArea(
+            of: CGPoint(x: origin.x, y: origin.y - 100),
+            windowSize: CGSize(width: windowSize.width, height: windowSize.height + 100),
+            on: neighboringScreens,
+        )
+    }
     return candidates.min { lhs, rhs in
-        visibleArea(of: lhs, windowSize: windowSize, on: screenRects) <
+        let lhsRecovery = recoveryArea(lhs)
+        let rhsRecovery = recoveryArea(rhs)
+        if lhsRecovery != rhsRecovery { return lhsRecovery < rhsRecovery }
+        return visibleArea(of: lhs, windowSize: windowSize, on: screenRects) <
             visibleArea(of: rhs, windowSize: windowSize, on: screenRects)
     }.orDie()
 }
