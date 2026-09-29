@@ -65,6 +65,8 @@ The current branch was built incrementally rather than as one isolated UI patch:
 | Constraint handling | Selected Dwindle/Custom topology remains authoritative even when an application has a large minimum size. |
 | Manual grouping | Service-mode `join-with` edits survive normalization and automatic reconciliation until membership changes. |
 | Everyday workspace tools | UUID-backed monitor profiles, monitor-relative slots, multi-window scratchpads, manual tree restoration, and a clickable workspace bar. |
+| App workspace memory | Reopened applications return to their last workspace, with explicit rules taking priority and no focus switch for background launches. |
+| Dock-aware layout | Actual Dock bounds supplement macOS usable-area reports; tiled windows reflow when the Dock moves between displays. |
 | Visual navigation | Searchable Overview and Command Palette, exposed through the menu and bindable CLI commands. |
 | Operational safety | Detection of competing window managers and daily checks for public releases without automatic installation. |
 
@@ -297,9 +299,14 @@ The Updates card can check this fork's latest public GitHub release once per day
 demand. It only reports availability and opens the release page; it never downloads or
 installs software automatically.
 
-The optional Workspace Bar creates a compact clickable strip on every connected display.
-It marks the active workspace, can include or hide empty workspaces, and remains visible
-across macOS Spaces.
+The optional Workspace Bar creates a compact strip with a monitor icon and clickable
+workspace dots on every connected display. It marks the active workspace, can include
+or hide empty workspaces, and remains available when a TileSail window is expanded.
+
+The bar uses the menu-bar strip when there is room. On a notched MacBook or a display
+with crowded menu items, it moves below that strip and reserves space above the tiled
+windows. TileSail periodically checks menu occupancy and adjusts the placement, including
+for its expanded/fullscreen layout, to keep window controls accessible.
 
 ## Workspaces
 
@@ -333,10 +340,12 @@ The backing workspaces whose names start with `_smooth-` are private implementat
 details. They never become the active workspace and are excluded from the menu bar,
 Workspace Bar, Overview, relative navigation, and `list-workspaces` output.
 
-When automatic layout is disabled for a monitor, TileSail records the tiling
-tree's groups, orientations, order, and weights. On relaunch it restores a saved tree
-only when the same workspace, display UUID, and complete set of windows can be matched,
-so a partial startup cannot overwrite the user's current arrangement.
+TileSail records workspace placement and the tiling tree's groups, orientations,
+order, and weights. On relaunch it first restores matched windows to their workspaces,
+then restores each complete tree when the workspace, display UUID, window set, and
+layout profile still match. This applies to manual layouts and unchanged automatic
+profiles; selecting a different profile takes precedence over a saved tree. Missing or
+ambiguous windows do not force a partial tree restoration.
 
 ### Workspace Monitor Assignment
 
@@ -379,6 +388,18 @@ cases that are not representable by the visual editor.
 Avoid using application identity as a substitute for workspace ownership unless that is
 intentional. A broad rule can make the same browser window appear to jump monitors when
 the app is rediscovered.
+
+### Remember where apps open
+
+In **Workspaces → App Workspaces**, **Remember where apps open** controls per-app
+workspace memory and is enabled by default. TileSail remembers the last workspace
+used by an application, including deliberate window moves. When a new window is
+registered after startup, it can return to that remembered workspace.
+
+Reopening an application in the foreground follows it to its destination workspace;
+a background launch does not switch your workspace. Explicit window-detection rules
+run after remembered placement and retain priority. Scratchpads and private workspaces
+are excluded. Startup restoration handles already-open windows separately.
 
 ## Automation
 
@@ -483,6 +504,31 @@ Some applications report minimum window sizes larger than their assigned tile. m
 may clamp the individual physical window, but TileSail keeps the layout style the
 user selected instead of silently switching the entire workspace to Grid.
 
+### Dock movement and usable screen area
+
+TileSail checks display work areas and the Dock's Accessibility bounds every half
+second while window management is enabled. After two matching samples of a changed
+work area, it schedules a layout refresh. The refresh keeps the existing tiling tree
+and recalculates window frames within the available area, including the configured
+gaps and workspace-bar reservation.
+
+When a visible Dock moves to another monitor, its measured bounds supplement
+`NSScreen.visibleFrame`. This handles cases where macOS continues to report the old
+Dock reservation or reports the full display as available even though the Dock covers
+part of it. The calculation supports bottom, left, and right placement and only adds
+space on the display containing the measured Dock. The first sample also triggers a
+refresh after TileSail starts.
+
+No separate setting is required. The adjustment applies to managed tiled windows and
+TileSail's expanded/fullscreen layout. Floating windows keep their existing behavior,
+and native macOS fullscreen windows remain under macOS control. With Dock auto-hide
+enabled, TileSail relies on the macOS usable-area report instead of resizing windows
+for every temporary appearance. It does not create additional copies of the Dock.
+
+If the Dock cannot be read through Accessibility, layout falls back to the macOS
+usable-area report. Application minimum sizes can still prevent a window from fitting
+its assigned area exactly.
+
 ## Multi-monitor model
 
 AeroSpace workspaces are not macOS Spaces. Each visible AeroSpace workspace belongs to
@@ -511,8 +557,8 @@ Included in this repository:
 - Automatic reconciliation and manual grouping preservation.
 - Visual TOML editing and its tests.
 - Stable monitor identity, constraint-aware animation, scratchpads, manual tree
-  restoration, the workspace bar, Overview, Command Palette, conflict detection,
-  and update checks.
+  restoration, per-app workspace memory, the compact workspace bar, Dock-aware
+  resizing, Overview, Command Palette, conflict detection, and update checks.
 - The `TileSail` development app name.
 
 Normally local to each user's Mac:
@@ -572,6 +618,9 @@ The main implementation entry points are:
 | Automatic layout reconciliation | [`Sources/AppBundle/layout/SmoothWorkspaceLayout.swift`](./Sources/AppBundle/layout/SmoothWorkspaceLayout.swift) |
 | Coordinated frame animation | [`Sources/AppBundle/layout/LayoutAnimation.swift`](./Sources/AppBundle/layout/LayoutAnimation.swift) |
 | Manual layout persistence | [`Sources/AppBundle/layout/PersistentManualLayouts.swift`](./Sources/AppBundle/layout/PersistentManualLayouts.swift) |
+| App workspace memory | [`Sources/AppBundle/layout/AppWorkspaceMemory.swift`](./Sources/AppBundle/layout/AppWorkspaceMemory.swift) |
+| Dock geometry and usable area | [`Sources/AppBundle/model/DockWorkArea.swift`](./Sources/AppBundle/model/DockWorkArea.swift), [`Sources/AppBundle/model/MonitorEx.swift`](./Sources/AppBundle/model/MonitorEx.swift) |
+| Work-area change detection | [`Sources/AppBundle/GlobalObserver.swift`](./Sources/AppBundle/GlobalObserver.swift) |
 | Workspace bar | [`Sources/AppBundle/ui/WorkspaceBar.swift`](./Sources/AppBundle/ui/WorkspaceBar.swift) |
 | Overview and command palette | [`Sources/AppBundle/ui/WorkspaceNavigator.swift`](./Sources/AppBundle/ui/WorkspaceNavigator.swift) |
 | Conflict and update checks | [`Sources/AppBundle/WindowManagerConflictDetector.swift`](./Sources/AppBundle/WindowManagerConflictDetector.swift), [`Sources/AppBundle/UpdateChecker.swift`](./Sources/AppBundle/UpdateChecker.swift) |
@@ -591,6 +640,8 @@ The main implementation entry points are:
 - `join-with` groups AeroSpace tree nodes, not native macOS window tabs.
 - Automatic layouts intentionally become authoritative again when workspace membership
   changes.
+- Dock-aware resizing does not reposition floating windows or manage native macOS
+  fullscreen windows, and does not reserve temporary auto-hidden Dock overlays.
 - macOS Accessibility behavior and application minimum sizes can still limit the exact
   final frame of an individual window.
 

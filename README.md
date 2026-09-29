@@ -4,9 +4,11 @@
 
 TileSail is an independent macOS window manager derived from
 [nikitabobko/AeroSpace](https://github.com/nikitabobko/AeroSpace) focused on a
-friendlier, more visual macOS tiling experience. It keeps AeroSpace's tree,
-workspaces, CLI, and TOML configuration while adding smooth coordinated window
-movement and a native Settings interface.
+visual, multi-monitor tiling experience. Choose a layout for each display and
+window count, switch workspaces with the keyboard or a compact workspace bar,
+and manage settings through a native interface. TileSail keeps AeroSpace's tree,
+workspaces, CLI, and TOML configuration while adding coordinated animations,
+workspace memory, layout restoration, and automatic adjustment around the Dock.
 
 > TileSail was previously developed as AeroSpaceSmooth. It is maintained independently
 > by **C. Cassel** and is not an official AeroSpace release.
@@ -32,8 +34,15 @@ movement and a native Settings interface.
   `join-with` grouping remains stable until workspace membership changes.
 - Visual ordered application rules for layout, title matching, workspace routing,
   and scratchpads; monitor-relative workspace slots; and ten multi-window scratchpads.
-- Manual-layout restoration, conflicting window-manager detection, and an opt-in
-  per-display workspace bar.
+- Workspace and tiling-tree restoration across TileSail restarts when the saved
+  windows, monitor, and layout profile can be matched.
+- Per-application workspace memory: reopened apps return to their last workspace;
+  explicit application rules take priority and background launches do not switch focus.
+- An optional compact workspace bar with a monitor icon and clickable workspace dots,
+  placed below a MacBook notch or crowded menu bar when needed.
+- Automatic resizing of managed tiled windows when the visible Dock moves between
+  monitors, using its actual bounds when macOS reports a stale usable area.
+- Detection of conflicting window managers.
 - A searchable workspace/window Overview and Command Palette, both available as
   menu actions and bindable commands.
 - Configurable daily update checks against TileSail's public GitHub releases; the
@@ -43,6 +52,20 @@ movement and a native Settings interface.
 Read the complete [TileSail feature and Settings guide](./TILESAIL.md)
 for the design goals, every Settings page, layout behavior, keyboard workflow,
 multi-monitor model, limitations, and build instructions.
+
+## Dock and multi-monitor behavior
+
+Move the Dock to another display as usual. TileSail detects the stable change and
+recalculates the space available to tiled windows on the active workspaces. This
+also applies to TileSail's expanded/fullscreen layout, and works with a Dock at the
+bottom, left, or right. The workspace bar reserves its own space so it does not
+cover window controls.
+
+This feature adjusts windows; it does not duplicate the macOS Dock. Floating
+windows and native macOS fullscreen windows are not automatically fitted by this
+Dock adjustment. With Dock auto-hide enabled, TileSail uses the usable area
+reported by macOS rather than reserving space for each temporary Dock appearance.
+An application's minimum window size can still prevent an exact fit.
 
 ## Settings screenshots
 
