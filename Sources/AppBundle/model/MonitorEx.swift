@@ -4,6 +4,7 @@ import Common
 extension MonitorInfo {
     @MainActor
     var visibleRectPaddedByOuterGaps: Rect {
+        let visibleRect = DockWorkArea.adjusted(self.visibleRect, screen: rect)
         let topLeft = visibleRect.topLeftCorner
         let gaps = ResolvedGaps(gaps: config.gaps, monitor: self)
         let barInset = workspaceBarTopInset
@@ -25,6 +26,7 @@ extension MonitorInfo {
     /// Expanded TileSail windows still leave room for the workspace switcher.
     @MainActor
     var visibleRectAvoidingWorkspaceBar: Rect {
+        let visibleRect = DockWorkArea.adjusted(self.visibleRect, screen: rect)
         let inset = workspaceBarTopInset
         return Rect(
             topLeftX: visibleRect.topLeftX, topLeftY: visibleRect.topLeftY + inset,

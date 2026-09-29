@@ -30,17 +30,36 @@ enum GlobalObserver {
     @MainActor private static var visibleFrameTimer: Timer?
     @MainActor private static var visibleFrameTracker = VisibleFrameChangeTracker()
 
+    @MainActor private static var frameScanInProgress = false
+    @MainActor private static var hasSampledFrames = false
+
     @MainActor
     private static func observeVisibleFrames() {
-        guard TrayMenuModel.shared.isEnabled else { return }
-        let frames = Dictionary(uniqueKeysWithValues: NSScreen.screens.compactMap { screen -> (Int, CGRect)? in
-            guard let number = screen.deviceDescription[NSDeviceDescriptionKey("NSScreenNumber")] as? NSNumber else { return nil }
-            return (number.intValue, screen.visibleFrame)
-        })
-        guard visibleFrameTracker.update(frames) else { return }
-        // Moving the Dock need not deliver a screen-parameters notification.
-        // The regular layout reads fresh visible frames for every active monitor.
-        scheduleCancellableCompleteRefreshSession(.globalObserver("visibleFrameChanged"))
+        guard TrayMenuModel.shared.isEnabled, !frameScanInProgress else { return }
+        frameScanInProgress = true
+        let pid = NSRunningApplication.runningApplications(withBundleIdentifier: "com.apple.dock").first?.processIdentifier
+        Task.startUnstructured { @MainActor in
+            defer { frameScanInProgress = false }
+            let dockFrame = await Task.detached(priority: .utility) {
+                pid.flatMap { DockWorkArea.readFrame(pid: $0) }
+            }.value
+            let preferences = UserDefaults(suiteName: "com.apple.dock")
+            DockWorkArea.frame = preferences?.bool(forKey: "autohide") == true ? nil : dockFrame
+            DockWorkArea.edge = preferences?.string(forKey: "orientation") ?? "bottom"
+            let frames = Dictionary(uniqueKeysWithValues: monitorInfos.map { monitor in
+                let rect = DockWorkArea.adjusted(monitor.visibleRect, screen: monitor.rect)
+                return (monitor.monitorAppKitNsScreenScreensId, CGRect(origin: rect.topLeftCorner, size: rect.size))
+            })
+            if ProcessInfo.processInfo.environment["TILESAIL_DOCK_DIAGNOSTICS"] == "1" {
+                print("Dock geometry: \(String(describing: dockFrame)); work areas: \(frames)")
+                unsafe fflush(stdout)
+            }
+            let changed = visibleFrameTracker.update(frames)
+            let firstSample = !hasSampledFrames
+            hasSampledFrames = true
+            guard changed || firstSample, TrayMenuModel.shared.isEnabled else { return }
+            scheduleCancellableCompleteRefreshSession(.globalObserver("visibleFrameChanged"))
+        }
     }
 
     private static func onNotif(_ notification: Notification) {
