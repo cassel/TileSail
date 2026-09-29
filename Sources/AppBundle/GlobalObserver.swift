@@ -1,7 +1,48 @@
 import AppKit
 import Common
 
+// Require two matching samples so Dock animations do not repeatedly resize windows.
+struct VisibleFrameChangeTracker {
+    private var applied: [Int: CGRect]?
+    private var pending: [Int: CGRect]?
+
+    mutating func update(_ frames: [Int: CGRect]) -> Bool {
+        guard !frames.isEmpty else { return false }
+        guard let applied else {
+            self.applied = frames
+            return false
+        }
+        guard frames != applied else {
+            pending = nil
+            return false
+        }
+        guard pending == frames else {
+            pending = frames
+            return false
+        }
+        self.applied = frames
+        pending = nil
+        return true
+    }
+}
+
 enum GlobalObserver {
+    @MainActor private static var visibleFrameTimer: Timer?
+    @MainActor private static var visibleFrameTracker = VisibleFrameChangeTracker()
+
+    @MainActor
+    private static func observeVisibleFrames() {
+        guard TrayMenuModel.shared.isEnabled else { return }
+        let frames = Dictionary(uniqueKeysWithValues: NSScreen.screens.compactMap { screen -> (Int, CGRect)? in
+            guard let number = screen.deviceDescription[NSDeviceDescriptionKey("NSScreenNumber")] as? NSNumber else { return nil }
+            return (number.intValue, screen.visibleFrame)
+        })
+        guard visibleFrameTracker.update(frames) else { return }
+        // Moving the Dock need not deliver a screen-parameters notification.
+        // The regular layout reads fresh visible frames for every active monitor.
+        scheduleCancellableCompleteRefreshSession(.globalObserver("visibleFrameChanged"))
+    }
+
     private static func onNotif(_ notification: Notification) {
         // Third line of defence against lock screen window. See: closedWindowsCache
         // Second and third lines of defence are technically needed only to avoid potential flickering
@@ -67,6 +108,15 @@ enum GlobalObserver {
 
     @MainActor
     static func initObserver() {
+        if visibleFrameTimer == nil {
+            observeVisibleFrames()
+            let timer = Timer(timeInterval: 0.5, repeats: true) { _ in
+                Task.startUnstructured { @MainActor in observeVisibleFrames() }
+            }
+            timer.tolerance = 0.1
+            RunLoop.main.add(timer, forMode: .common)
+            visibleFrameTimer = timer
+        }
         let nc = NSWorkspace.shared.notificationCenter
         nc.addObserver(forName: NSWorkspace.didLaunchApplicationNotification, object: nil, queue: .main, using: onNotif)
         nc.addObserver(forName: NSWorkspace.didActivateApplicationNotification, object: nil, queue: .main, using: onNotif)
