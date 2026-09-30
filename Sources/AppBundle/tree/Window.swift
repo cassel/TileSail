@@ -13,6 +13,9 @@ open class Window: TreeNode, Hashable {
     var scratchpadIsPresented = false
     var scratchpadUsesNativeMinimize = false
     var persistentLayoutTitle: String?
+    // Owned minimization stays in the workspace tree; user minimization does not.
+    var isWorkspaceNativeHidden = false
+    var isWorkspaceRestorePending = false
 
     @MainActor
     init(id: UInt32, _ app: any AbstractApp, lastFloatingSize: CGSize?, parent: NonLeafTreeNodeObject, adaptiveWeight: CGFloat, index: Int) {

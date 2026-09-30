@@ -247,6 +247,24 @@ final class MacApp: AbstractApp {
         }
     }
 
+    // Separate from setFrameJobs: a layout write must never cancel visibility.
+    func setWorkspaceMinimized(_ windowId: UInt32, _ value: Bool) async throws -> Bool {
+        try await withWindow(windowId, .nonCancellable) { [axApp] window, job in
+            try disableAnimations(app: axApp.threadGuarded, job) {
+                window.set(Ax.minimizedAttr, value)
+            }
+        } ?? false
+    }
+
+    func restoreWorkspaceWindowForTermination(_ windowId: UInt32) {
+        let semaphore = DispatchSemaphore(value: 0)
+        let job = thread?.runInLoopAsync(job: RunLoopJob(.nonCancellable)) { [windows] _ in
+            defer { semaphore.signal() }
+            windows.threadGuarded[windowId]?.ax.set(Ax.minimizedAttr, false)
+        } ?? .cancelled
+        if !job.isCancelled { semaphore.wait() }
+    }
+
     func dumpWindowAxInfo(windowId: UInt32, _ cm: CancellationMode) async throws -> [String: Json] {
         try await withWindow(windowId, cm) { window, job in
             dumpAxRecursive(window, .window)

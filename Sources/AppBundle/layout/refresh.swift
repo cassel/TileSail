@@ -169,7 +169,7 @@ private func layoutWorkspaces() async throws {
     let transaction = LayoutTransaction()
     if !TrayMenuModel.shared.isEnabled {
         for workspace in Workspace.all {
-            workspace.allLeafWindowsRecursive.forEach { ($0 as! MacWindow).unhideFromCorner() } // todo as!
+            for window in workspace.allLeafWindowsRecursive { try await window.asMacWindow().showForWorkspace() }
             try await workspace.layoutWorkspace(transaction) // Unhide tiling windows from corner
         }
         LayoutAnimator.shared.apply(transaction, animated: false)
@@ -179,16 +179,13 @@ private func layoutWorkspaces() async throws {
     // to reduce flicker, first unhide visible workspaces, then hide invisible ones
     for monitor in monitors {
         let workspace = monitor.activeWorkspace
-        workspace.allLeafWindowsRecursive.forEach { ($0 as! MacWindow).unhideFromCorner() } // todo as!
+        for window in workspace.allLeafWindowsRecursive { try await window.asMacWindow().showForWorkspace() }
         try await workspace.layoutWorkspace(transaction)
     }
     LayoutAnimator.shared.apply(transaction)
     for workspace in Workspace.all where !workspace.isVisible {
         for window in workspace.allLeafWindowsRecursive {
-            // Pick the least visible hiding point for the current display
-            // arrangement. A corner is best on one monitor; a bottom edge can
-            // be safer when both side corners touch neighboring displays.
-            try await (window as! MacWindow).hideInCorner(.adaptive) // todo as!
+            try await window.asMacWindow().hideForWorkspace()
         }
     }
 }

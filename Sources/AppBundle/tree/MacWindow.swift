@@ -32,6 +32,8 @@ final class MacWindow: Window {
             window.isFullscreen = previous.isFullscreen
             window.noOuterGapsInFullscreen = previous.noOuterGapsInFullscreen
             window.layoutReason = previous.layoutReason
+            window.isWorkspaceNativeHidden = previous.isWorkspaceNativeHidden
+            window.isWorkspaceRestorePending = previous.isWorkspaceRestorePending
             window.scratchpadSlot = previous.scratchpadSlot
             window.scratchpadWasFloating = previous.scratchpadWasFloating
             window.scratchpadIsPresented = previous.scratchpadIsPresented
@@ -65,6 +67,7 @@ final class MacWindow: Window {
         AppWorkspaceMemory.shared.beginRegistration(window)
         defer { AppWorkspaceMemory.shared.endRegistration(window) }
         allWindowsMap[windowId] = window
+        window.isWorkspaceNativeHidden = window.hasSavedWorkspaceHide
 
         try await debugWindowsIfRecording(window, .nonCancellable)
         // Dialogs and popups belong with their parent, not the app's saved workspace.
@@ -72,8 +75,20 @@ final class MacWindow: Window {
         AppWorkspaceMemory.shared.setEligible(window, remembersWorkspace)
         if try await !restoreClosedWindowsCacheIfNeeded(newlyDetectedWindow: window) {
             let restored = AppWorkspaceMemory.shared.restore(window, duringStartup: isStartup)
+            if window.isWorkspaceNativeHidden,
+               let saved = UserDefaults.standard.dictionary(forKey: window.workspaceHideKey),
+               let name = saved["workspace"] as? String
+            {
+                let workspace = Workspace.get(byName: name)
+                if saved["floating"] as? Bool == true {
+                    window.bindAsFloatingWindow(to: workspace)
+                } else {
+                    window.bind(to: workspace.rootTilingContainer, adaptiveWeight: WEIGHT_AUTO, index: INDEX_BIND_LAST)
+                }
+            }
             await tryOnWindowDetected(window)
-            if restored, NSWorkspace.shared.frontmostApplication?.processIdentifier == macApp.pid {
+            if restored, !window.isWorkspaceNativeHidden,
+               NSWorkspace.shared.frontmostApplication?.processIdentifier == macApp.pid {
                 _ = window.focusWindow()
             }
         }
@@ -120,6 +135,7 @@ final class MacWindow: Window {
             return
         }
         scratchpadHideVerificationTask?.cancel()
+        clearSavedWorkspaceHide()
         if !skipClosedWindowsCache { cacheClosedWindowIfNeeded() }
         let parent = unbindFromParent().parent
         let deadWindowWorkspace = parent.nodeWorkspace
@@ -156,6 +172,60 @@ final class MacWindow: Window {
     override func closeAxWindow() {
         garbageCollect(skipClosedWindowsCache: true)
         macApp.closeAndUnregisterAxWindow(windowId)
+    }
+
+    // Persist ownership so a crash/relaunch can distinguish our minimized
+    // windows from windows deliberately minimized by the user.
+    private var workspaceHideKey: String {
+        "AeroSpaceSmooth.workspace-hide.\(macApp.pid).\(windowId)"
+    }
+
+    private var workspaceHideToken: String {
+        String(macApp.nsApp.launchDate?.timeIntervalSince1970 ?? 0)
+    }
+
+    private var hasSavedWorkspaceHide: Bool {
+        let saved = UserDefaults.standard.dictionary(forKey: workspaceHideKey)
+        return saved?["launch"] as? String == workspaceHideToken ||
+            UserDefaults.standard.string(forKey: workspaceHideKey) == workspaceHideToken
+    }
+
+    func clearSavedWorkspaceHide() {
+        UserDefaults.standard.removeObject(forKey: workspaceHideKey)
+    }
+
+    @MainActor
+    func hideForWorkspace() async throws {
+        guard scratchpadSlot == nil else {
+            try await hideInCorner(.adaptive)
+            return
+        }
+        guard layoutReason == .standard, !isWorkspaceNativeHidden || isWorkspaceRestorePending else { return }
+        // Do not adopt a user-minimized window while its AX notification waits.
+        if !isWorkspaceNativeHidden, try await isMacosMinimized(.cancellable) { return }
+        try checkCancellation()
+        isWorkspaceNativeHidden = true
+        isWorkspaceRestorePending = false
+        UserDefaults.standard.set([
+            "launch": workspaceHideToken,
+            "workspace": nodeWorkspace?.name ?? "",
+            "floating": isFloating,
+        ], forKey: workspaceHideKey)
+        if try await !macApp.setWorkspaceMinimized(windowId, true) {
+            isWorkspaceNativeHidden = false
+            clearSavedWorkspaceHide()
+        }
+    }
+
+    @MainActor
+    func showForWorkspace() async throws {
+        if isWorkspaceNativeHidden && !isWorkspaceRestorePending {
+            isWorkspaceRestorePending = true
+            if try await !macApp.setWorkspaceMinimized(windowId, false) {
+                isWorkspaceRestorePending = false
+            }
+        }
+        unhideFromCorner()
     }
 
     // todo it's part of the window layout and should be moved to layoutRecursive.swift

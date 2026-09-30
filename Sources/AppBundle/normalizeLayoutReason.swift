@@ -21,8 +21,21 @@ private func validateStillPopups() async throws {
 }
 
 @MainActor
-private func _normalizeLayoutReason(workspace: Workspace, windows: [Window]) async throws {
+func _normalizeLayoutReason(workspace: Workspace, windows: [Window]) async throws {
     for window in windows {
+        if window.isWorkspaceNativeHidden {
+            // AX accepts deminiaturization before its animation completes. Keep
+            // ownership until macOS confirms it, otherwise normalization moves
+            // the window to the global minimized container and loses its workspace.
+            if window.isWorkspaceRestorePending,
+               try await !window.isMacosMinimized(.cancellable)
+            {
+                window.isWorkspaceRestorePending = false
+                window.isWorkspaceNativeHidden = false
+                (window as? MacWindow)?.clearSavedWorkspaceHide()
+            }
+            continue
+        }
         let isMacosFullscreen = try await window.isMacosFullscreen(.cancellable)
         let isMacosMinimized = try await (!isMacosFullscreen).andAsync { @MainActor @Sendable in try await window.isMacosMinimized(.cancellable) }
         let isMacosWindowOfHiddenApp = !isMacosFullscreen && !isMacosMinimized &&

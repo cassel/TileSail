@@ -18,16 +18,30 @@ func interceptTermination(_ _signal: Int32) {
     } as sig_t)
 }
 
+@MainActor private var terminationObserver: NSObjectProtocol?
+@MainActor private var didRestoreWindowsForTermination = false
+
 @MainActor
 func initTerminationHandler() {
     unsafe _terminationHandler = AppServerTerminationHandler()
+    terminationObserver = NotificationCenter.default.addObserver(
+        forName: NSApplication.willTerminateNotification, object: nil, queue: .main,
+    ) { _ in
+        MainActor.assumeIsolated { terminationHandler?.beforeTermination() }
+    }
 }
 
 private struct AppServerTerminationHandler: TerminationHandler {
     @MainActor
     func beforeTermination() {
+        guard !didRestoreWindowsForTermination else { return }
+        didRestoreWindowsForTermination = true
         // Leave visible windows exactly where the user put them. Only recover
         // windows hidden by TileSail, on their own monitor rather than at (0, 0).
+        for window in MacWindow.allWindowsMap.values where window.isWorkspaceNativeHidden {
+            window.macApp.restoreWorkspaceWindowForTermination(window.windowId)
+            window.clearSavedWorkspaceHide()
+        }
         for window in MacWindow.allWindowsMap.values where window.isHiddenInCorner {
             let current = window.macApp.getAxRectForTermination(window.windowId)
             let monitor = window.nodeWorkspace?.workspaceMonitor ?? current?.center.monitorApproximation ?? mainMonitorInfo

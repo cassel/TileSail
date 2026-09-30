@@ -5,6 +5,9 @@ final class TestWindow: Window, CustomStringConvertible {
     private var _rect: Rect?
     private let getAxRectForTest: (@MainActor () async throws -> Rect?)?
     var isMacosFullscreenForTest = false
+    var isMacosMinimizedForTest = false
+
+    override func isMacosMinimized(_ cm: CancellationMode) async throws -> Bool { isMacosMinimizedForTest }
 
     @MainActor
     private init(
