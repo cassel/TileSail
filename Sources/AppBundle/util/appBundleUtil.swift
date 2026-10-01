@@ -40,7 +40,8 @@ private struct AppServerTerminationHandler: TerminationHandler {
         // windows hidden by TileSail, on their own monitor rather than at (0, 0).
         for window in MacWindow.allWindowsMap.values where window.isWorkspaceNativeHidden {
             window.macApp.restoreWorkspaceWindowForTermination(window.windowId)
-            window.clearSavedWorkspaceHide()
+            // Keep ownership through the next launch. AX can still report this
+            // window as minimized while macOS finishes the restore animation.
         }
         for window in MacWindow.allWindowsMap.values where window.isHiddenInCorner {
             let current = window.macApp.getAxRectForTermination(window.windowId)

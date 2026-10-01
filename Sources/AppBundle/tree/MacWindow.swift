@@ -68,6 +68,13 @@ final class MacWindow: Window {
         defer { AppWorkspaceMemory.shared.endRegistration(window) }
         allWindowsMap[windowId] = window
         window.isWorkspaceNativeHidden = window.hasSavedWorkspaceHide
+        if window.isWorkspaceNativeHidden,
+           (try? await !window.isMacosMinimized(.nonCancellable)) == true
+        {
+            // The previous instance unminimized it on exit. A visible workspace
+            // can release ownership; an inactive one must hide it again.
+            window.isWorkspaceRestorePending = true
+        }
 
         try await debugWindowsIfRecording(window, .nonCancellable)
         // Dialogs and popups belong with their parent, not the app's saved workspace.

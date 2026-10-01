@@ -116,4 +116,60 @@ final class PersistentManualLayoutsTest: XCTestCase {
         )
     }
 
+    func testMovingWindowRemovesStaleWorkspaceAndRecordsOneVisibleWorkspace() async throws {
+        defer { _ = mainMonitorInfo.setActiveWorkspace(Workspace.get(byName: "setUpWorkspacesForTests")) }
+        let suite = "PersistentManualLayoutsTest.\(UUID().uuidString)"
+        let defaults = try XCTUnwrap(UserDefaults(suiteName: suite))
+        defer { defaults.removePersistentDomain(forName: suite) }
+        let store = PersistentManualLayoutStore(defaults: defaults)
+        let old = Workspace.get(byName: "3")
+        let new = Workspace.get(byName: "4")
+        XCTAssertTrue(mainMonitorInfo.setActiveWorkspace(old))
+        let window = TestWindow.new(id: 201, parent: old.rootTilingContainer)
+        await store.capture()
+        window.bind(to: new.rootTilingContainer, adaptiveWeight: 1, index: INDEX_BIND_LAST)
+        XCTAssertTrue(mainMonitorInfo.setActiveWorkspace(new))
+        await store.capture()
+        XCTAssertNil(store.layouts["3"])
+        XCTAssertEqual(store.layouts["4"]?.root.windowIdentities.first?.nativeWindowId, 201)
+        XCTAssertEqual(store.layouts["4"]?.wasVisible, true)
+        let active = defaults.dictionary(forKey: "AeroSpaceSmooth.active-workspaces-by-monitor.v1") as? [String: String]
+        XCTAssertEqual(active?[mainMonitorInfo.stableIdentifier], "4")
+    }
+
+    func testStartupRestoresFloatingWindowWorkspace() async throws {
+        defer { _ = mainMonitorInfo.setActiveWorkspace(Workspace.get(byName: "setUpWorkspacesForTests")) }
+        let suite = "PersistentManualLayoutsTest.\(UUID().uuidString)"
+        let defaults = try XCTUnwrap(UserDefaults(suiteName: suite))
+        defer { defaults.removePersistentDomain(forName: suite) }
+        let store = PersistentManualLayoutStore(defaults: defaults)
+        let original = Workspace.get(byName: "7")
+        let other = Workspace.get(byName: "3")
+        let window = TestWindow.new(id: 202, parent: original.floatingWindowsContainer)
+        await store.capture()
+        window.bindAsFloatingWindow(to: other)
+        let reloaded = PersistentManualLayoutStore(defaults: defaults)
+        await reloaded.restoreAfterInitialRefresh()
+        XCTAssertTrue(window.nodeWorkspace === original)
+        XCTAssertTrue(window.parent === original.floatingWindowsContainer)
+    }
+
+    func testStartupMatchesStableNativeIdAfterTitleChanges() async throws {
+        defer { _ = mainMonitorInfo.setActiveWorkspace(Workspace.get(byName: "setUpWorkspacesForTests")) }
+        let suite = "PersistentManualLayoutsTest.\(UUID().uuidString)"
+        let defaults = try XCTUnwrap(UserDefaults(suiteName: suite))
+        defer { defaults.removePersistentDomain(forName: suite) }
+        let store = PersistentManualLayoutStore(defaults: defaults)
+        let original = Workspace.get(byName: "4")
+        let other = Workspace.get(byName: "3")
+        let window = TestWindow.new(id: 203, parent: original.rootTilingContainer)
+        window.persistentLayoutTitle = "Before"
+        await store.capture()
+        window.bind(to: other.rootTilingContainer, adaptiveWeight: 1, index: INDEX_BIND_LAST)
+        window.persistentLayoutTitle = "After"
+        let reloaded = PersistentManualLayoutStore(defaults: defaults)
+        await reloaded.restoreAfterInitialRefresh()
+        XCTAssertTrue(window.nodeWorkspace === original)
+    }
+
 }

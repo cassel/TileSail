@@ -34,6 +34,7 @@ struct PersistentWorkspaceLayout: Codable, Equatable, Sendable {
     let root: PersistentLayoutNode
     var wasVisible: Bool? = nil
     var automaticProfile: SmoothMonitorLayoutProfile? = nil
+    var floatingWindows: [PersistentWindowIdentity]? = nil
 }
 
 @MainActor
@@ -42,8 +43,10 @@ final class PersistentManualLayoutStore: ObservableObject {
 
     private static let layoutsKey = "AeroSpaceSmooth.manual-workspace-layouts.v1"
     private static let enabledKey = "AeroSpaceSmooth.restore-manual-workspace-layouts"
+    private static let activeWorkspacesKey = "AeroSpaceSmooth.active-workspaces-by-monitor.v1"
     private let defaults: UserDefaults
     private var isReadyToCapture = false
+    private var activeWorkspaces: [String: String]
 
     @Published private(set) var isEnabled: Bool
     @Published private(set) var layouts: [String: PersistentWorkspaceLayout]
@@ -51,6 +54,7 @@ final class PersistentManualLayoutStore: ObservableObject {
     init(defaults: UserDefaults = .standard) {
         self.defaults = defaults
         isEnabled = defaults.object(forKey: Self.enabledKey) as? Bool ?? true
+        activeWorkspaces = defaults.dictionary(forKey: Self.activeWorkspacesKey) as? [String: String] ?? [:]
         layouts = defaults.data(forKey: Self.layoutsKey)
             .flatMap { try? JSONDecoder().decode([String: PersistentWorkspaceLayout].self, from: $0) }
             ?? [:]
@@ -86,11 +90,12 @@ final class PersistentManualLayoutStore: ObservableObject {
         for workspace in Workspace.all where workspace.isUserFacing {
             let monitor = workspace.workspaceMonitor
             let profile = SmoothLayoutSettingsStore.shared.profile(for: monitor)
-            let windows = workspace.rootTilingContainer.allLeafWindowsRecursive
+            let tilingWindows = workspace.rootTilingContainer.allLeafWindowsRecursive
+            let floatingWindows = workspace.floatingWindows.filter { $0.scratchpadSlot == nil }
             // Empty discovery during shutdown must not erase the last usable layout.
-            guard !windows.isEmpty else { continue }
+            guard !tilingWindows.isEmpty || !floatingWindows.isEmpty else { continue }
 
-            let identities = await windowIdentities(windows)
+            let identities = await windowIdentities(tilingWindows + floatingWindows)
             let root = captureNode(workspace.rootTilingContainer, weight: 1, identities: identities)
             updated[workspace.name] = PersistentWorkspaceLayout(
                 workspaceName: workspace.name,
@@ -98,12 +103,47 @@ final class PersistentManualLayoutStore: ObservableObject {
                 root: root,
                 wasVisible: workspace.isVisible,
                 automaticProfile: profile.enabled ? profile : nil,
+                floatingWindows: floatingWindows.compactMap { identities[$0.windowId] },
             )
+        }
+
+        // Older captures may still claim windows that have since moved away.
+        // Keep snapshots for closed windows, but discard a stale snapshot once
+        // one of its native windows is positively known in another workspace.
+        let liveOwners = Dictionary(uniqueKeysWithValues: Workspace.all.flatMap { workspace in
+            (workspace.rootTilingContainer.allLeafWindowsRecursive + workspace.floatingWindows)
+                .map { ($0.windowId, (workspace.name, $0.app.rawAppBundleId ?? "")) }
+        })
+        for (name, saved) in updated where !Workspace.all.contains(where: {
+            $0.name == name && (!$0.rootTilingContainer.allLeafWindowsRecursive.isEmpty || !$0.floatingWindows.isEmpty)
+        }) {
+            let savedWindows = saved.root.windowIdentities + (saved.floatingWindows ?? [])
+            if savedWindows.contains(where: { identity in
+                guard let id = identity.nativeWindowId, let owner = liveOwners[id] else { return false }
+                return owner.0 != name && owner.1 == identity.applicationIdentifier
+            }) {
+                updated.removeValue(forKey: name)
+            }
+        }
+        // Visibility is a property of the monitor. Refresh it for every saved
+        // workspace, including empty ones, so a previous workspace cannot stay
+        // marked visible alongside its replacement.
+        for (name, var saved) in updated {
+            if let monitor = monitorInfos.first(where: { $0.stableIdentifier == saved.monitorIdentifier }) {
+                saved.wasVisible = monitor.activeWorkspace.name == name
+                updated[name] = saved
+            }
         }
 
         if updated != layouts {
             layouts = updated
             persist()
+        }
+        let active = Dictionary(monitorInfos.map { ($0.stableIdentifier, $0.activeWorkspace.name) },
+                                uniquingKeysWith: { first, _ in first })
+        if active != activeWorkspaces {
+            activeWorkspaces = active
+            defaults.set(active, forKey: Self.activeWorkspacesKey)
         }
     }
 
@@ -137,33 +177,64 @@ final class PersistentManualLayoutStore: ObservableObject {
     // Startup discovery puts every window on a monitor into its active workspace.
     // Recover workspace membership before attempting to reconstruct individual trees.
     private func restoreWindowPlacement() async {
-        let windows = Workspace.all.flatMap { $0.rootTilingContainer.allLeafWindowsRecursive }
+        let windows = Workspace.all.flatMap { $0.rootTilingContainer.allLeafWindowsRecursive + $0.floatingWindows }
         let identities = await windowIdentities(windows)
-        let savedIdentities = layouts.values.flatMap { $0.root.windowIdentities }
+        let savedIdentities = layouts.values.flatMap { $0.root.windowIdentities + ($0.floatingWindows ?? []) }
+        let claimants = Dictionary(grouping: layouts.values.flatMap { saved in
+            (saved.root.windowIdentities + (saved.floatingWindows ?? [])).compactMap { identity in
+                identity.nativeWindowId.map { ($0, identity, saved.workspaceName) }
+            }
+        }, by: { $0.0 })
+        // Saved snapshots from older versions may mark several workspaces visible
+        // on one monitor. Select exactly one before placing windows.
+        for monitor in monitorInfos {
+            let candidates = layouts.values.filter { saved in
+                saved.monitorIdentifier == monitor.stableIdentifier &&
+                saved.automaticProfile == (SmoothLayoutSettingsStore.shared.profile(for: monitor).enabled
+                    ? SmoothLayoutSettingsStore.shared.profile(for: monitor) : nil)
+            }
+            let remembered = activeWorkspaces[monitor.stableIdentifier].flatMap { name in
+                candidates.first(where: { $0.workspaceName == name })
+            }
+            let visible = candidates.filter { $0.wasVisible == true }.max { left, right in
+                let leftCount = left.root.windowIdentities.count + (left.floatingWindows?.count ?? 0)
+                let rightCount = right.root.windowIdentities.count + (right.floatingWindows?.count ?? 0)
+                return leftCount < rightCount
+            }
+            if let chosen = remembered ?? visible {
+                _ = monitor.setActiveWorkspace(Workspace.get(byName: chosen.workspaceName))
+            }
+        }
         var used: Set<UInt32> = []
         for saved in layouts.values.sorted(by: { $0.workspaceName < $1.workspaceName }) {
             guard let monitor = monitorInfos.first(where: { $0.stableIdentifier == saved.monitorIdentifier }) else { continue }
             let profile = SmoothLayoutSettingsStore.shared.profile(for: monitor)
             guard saved.automaticProfile == (profile.enabled ? profile : nil) else { continue }
             let workspace = Workspace.get(byName: saved.workspaceName)
-            if saved.wasVisible == true {
-                guard monitor.setActiveWorkspace(workspace) else { continue }
-            } else {
-                guard workspace.assign(to: monitor) else { continue }
-            }
-            for identity in saved.root.windowIdentities {
+            guard workspace.assign(to: monitor) else { continue }
+            for identity in saved.root.windowIdentities + (saved.floatingWindows ?? []) {
+                if let id = identity.nativeWindowId, let claims = claimants[id], claims.count > 1,
+                   let remembered = AppWorkspaceMemory.shared.workspaces[identity.applicationIdentifier],
+                   claims.contains(where: { $0.2 == remembered }), remembered != saved.workspaceName
+                {
+                    continue
+                }
                 let candidates = windows.filter { window in
                     guard !used.contains(window.windowId), let current = identities[window.windowId] else { return false }
-                    return current.applicationIdentifier == identity.applicationIdentifier && current.title == identity.title
+                    return current.applicationIdentifier == identity.applicationIdentifier
                 }
                 let sameNative = candidates.first { $0.windowId == identity.nativeWindowId }
                 let uniqueTitle = !identity.title.isEmpty && candidates.count == 1 && savedIdentities.filter {
                     $0.applicationIdentifier == identity.applicationIdentifier && $0.title == identity.title
-                }.count == 1
+                }.count == 1 && identities[candidates[0].windowId]?.title == identity.title
                 guard let window = sameNative ?? (uniqueTitle ? candidates.first : nil) else { continue }
                 used.insert(window.windowId)
                 if window.nodeWorkspace != workspace {
-                    window.bind(to: workspace.rootTilingContainer, adaptiveWeight: 1, index: INDEX_BIND_LAST)
+                    if (saved.floatingWindows ?? []).contains(identity) {
+                        window.bindAsFloatingWindow(to: workspace)
+                    } else {
+                        window.bind(to: workspace.rootTilingContainer, adaptiveWeight: 1, index: INDEX_BIND_LAST)
+                    }
                 }
             }
         }
@@ -260,6 +331,13 @@ private func matchWindows(
     var usedWindowIds: Set<UInt32> = []
     var result: [PersistentWindowIdentity: Window] = [:]
     for identity in savedIdentities {
+        guard let id = identity.nativeWindowId,
+              let window = currentWindows.first(where: { $0.windowId == id }),
+              currentIdentities[id]?.applicationIdentifier == identity.applicationIdentifier,
+              usedWindowIds.insert(id).inserted else { continue }
+        result[identity] = window
+    }
+    for identity in savedIdentities where result[identity] == nil {
         guard let window = exact[persistentExactWindowKey(identity)],
               usedWindowIds.insert(window.windowId).inserted else { continue }
         result[identity] = window
