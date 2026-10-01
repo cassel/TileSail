@@ -28,7 +28,8 @@ func _normalizeLayoutReason(workspace: Workspace, windows: [Window]) async throw
             // ownership until macOS confirms it, otherwise normalization moves
             // the window to the global minimized container and loses its workspace.
             if window.isWorkspaceRestorePending,
-               try await !window.isMacosMinimized(.cancellable)
+               try await !window.isMacosMinimized(.cancellable),
+               window.isWorkspaceRestorePending
             {
                 window.isWorkspaceRestorePending = false
                 window.isWorkspaceNativeHidden = false
@@ -38,6 +39,9 @@ func _normalizeLayoutReason(workspace: Workspace, windows: [Window]) async throw
         }
         let isMacosFullscreen = try await window.isMacosFullscreen(.cancellable)
         let isMacosMinimized = try await (!isMacosFullscreen).andAsync { @MainActor @Sendable in try await window.isMacosMinimized(.cancellable) }
+        // A workspace switch can claim this window while the AX reads suspend.
+        // Never turn that manager-owned minimization into a user minimization.
+        guard !window.isWorkspaceNativeHidden else { continue }
         let isMacosWindowOfHiddenApp = !isMacosFullscreen && !isMacosMinimized &&
             !config.automaticallyUnhideMacosHiddenApps && window.macAppUnsafe.nsApp.isHidden
         switch window.layoutReason {

@@ -34,7 +34,7 @@ func runHeavyCompleteRefreshSession(
         try await $refreshSessionEvent.withValue(event) {
             let nativeFocused = try await getNativeFocusedWindow(.cancellable)
             if let nativeFocused { try await debugWindowsIfRecording(nativeFocused, .cancellable) }
-            updateFocusCache(nativeFocused)
+            try await updateFocusCache(nativeFocused)
 
             if shouldLayoutWorkspaces && optimisticallyPreLayoutWorkspaces { try await layoutWorkspaces() }
 
@@ -71,7 +71,7 @@ func runLightSession<T>(
     return try await $refreshSessionEvent.withValue(event) {
         let nativeFocused = try await getNativeFocusedWindow(.cancellable)
         if let nativeFocused { try await debugWindowsIfRecording(nativeFocused, .cancellable) }
-        updateFocusCache(nativeFocused)
+        try await updateFocusCache(nativeFocused)
         let focusBefore = focus.windowOrNil
 
         await refreshModel_nonCancellable()
@@ -166,6 +166,8 @@ enum OptimalHideCorner {
 
 @MainActor
 private func layoutWorkspaces() async throws {
+    workspaceVisibilityUpdateDepth += 1
+    defer { workspaceVisibilityUpdateDepth -= 1 }
     let transaction = LayoutTransaction()
     if !TrayMenuModel.shared.isEnabled {
         for workspace in Workspace.all {

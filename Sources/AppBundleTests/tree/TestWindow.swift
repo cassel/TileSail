@@ -7,7 +7,12 @@ final class TestWindow: Window, CustomStringConvertible {
     var isMacosFullscreenForTest = false
     var isMacosMinimizedForTest = false
 
-    override func isMacosMinimized(_ cm: CancellationMode) async throws -> Bool { isMacosMinimizedForTest }
+    var onReadMinimized: (@MainActor () -> Void)?
+
+    override func isMacosMinimized(_ cm: CancellationMode) async throws -> Bool {
+        await onReadMinimized?()
+        return isMacosMinimizedForTest
+    }
 
     @MainActor
     private init(
