@@ -122,6 +122,10 @@ Existing configuration paths and saved AeroSpaceSmooth settings remain compatibl
 The internal Xcode project and scheme retain their historical names; both app
 configurations produce **TileSail.app**.
 
+Maintainers: see the [architecture and repository map](./dev-docs/architecture.md),
+[security model](./SECURITY.md), and [2026-10-07 audit](./dev-docs/audits/2026-10-07.md).
+Preview safe build cleanup with `bash script/clean-project.sh --dry-run`.
+
 ## Credits and license
 
 TileSail builds on [AeroSpace by Nikita Bobko and its contributors](https://github.com/nikitabobko/AeroSpace).

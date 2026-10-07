@@ -6,6 +6,13 @@ import XCTest
 final class EvalCommandTest: XCTestCase {
     override func setUp() async throws { setUpWorkspacesForTests() }
 
+    func testRunGroupingLimitFailure() async {
+        let expression = String(repeating: "(", count: 129) + "true" + String(repeating: ")", count: 129)
+        let result = await parseCommand("eval '" + expression + "'").cmdOrDie.run(.defaultEnv, .emptyStdin)
+        assertEquals(result.exitCode.rawValue, 2)
+        assertEquals(result.stderr, ["Line 1 Column 129: Maximum shell grouping depth of 128 exceeded"])
+    }
+
     func testParse() {
         testParseSingleCommandSucc("eval 'workspace foo'", EvalCmdArgs(rawArgs: []).copy(\.shellExpr, .initialized("workspace foo")))
         assertEquals(parseCommand("eval").errorOrNil, "ERROR: Argument '<aerospace-shell-expr>' is mandatory")

@@ -57,6 +57,113 @@ final class VisualConfigSettingsTest: XCTestCase {
         assertEquals(VisualConfigCodec.patch(fixture, from: draft, to: draft), fixture)
     }
 
+    func testWorkspaceRuleQuotesPreserveOneCommandAndExactName() throws {
+        for workspace in ["Bob's", "a';close;'b", "both'\"quotes\\and;close", "trailing'\\", "pair'\\\\", "double\"quote", "plain"] {
+            let application = VisualApplicationRule(
+                bundleIdentifier: "com.example.app",
+                titleContains: "",
+                layout: nil,
+                workspace: workspace,
+            )
+            let rule = VisualWindowRule(applicationRule: application)
+            XCTAssertEqual(rule.commands.count, 1)
+            let parsed = try rule.commands[0].lexAndParseShell().get()
+            guard case .cmd(let words) = parsed else {
+                XCTFail("A workspace name must never generate more than one command: \(workspace)")
+                continue
+            }
+            XCTAssertEqual(words, ["move-node-to-workspace", "--", workspace])
+            XCTAssertEqual(rule.visualApplicationRule, application)
+            let original = try VisualConfigCodec.decode(fixture)
+            var draft = original
+            draft.windowRules = [rule]
+            let patched = VisualConfigCodec.patch(fixture, from: original, to: draft)
+            XCTAssertTrue(parseConfig(patched).errors.isEmpty)
+            XCTAssertEqual(try VisualConfigCodec.decode(patched).windowRules[0].visualApplicationRule, application)
+        }
+    }
+
+    func testSavePreservesExternalEditsUntilReload() async throws {
+        let url = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString + ".toml")
+        defer { try? FileManager.default.removeItem(at: url) }
+        try fixture.write(to: url, atomically: true, encoding: .utf8)
+        var reloadCount = 0
+        let store = VisualConfigSettingsStore(configLocation: url, reload: { _ in
+            reloadCount += 1
+            return ReloadConfigResult(isOk: true, stdout: "", stderr: "")
+        })
+        store.draft.accordionPadding = 45
+        let externalText = fixture + "\n# Written by an external editor.\n"
+        try externalText.write(to: url, atomically: true, encoding: .utf8)
+
+        await store.save()
+
+        XCTAssertEqual(try String(contentsOf: url, encoding: .utf8), externalText)
+        XCTAssertEqual(reloadCount, 0)
+        XCTAssertTrue(store.hasChanges)
+        guard case .failed(let message) = store.status else {
+            return XCTFail("Saving a stale draft must report a conflict")
+        }
+        XCTAssertTrue(message.contains("Reload from Disk"))
+
+        store.load()
+        store.draft.accordionPadding = 45
+        await store.save()
+
+        let savedText = try String(contentsOf: url, encoding: .utf8)
+        XCTAssertTrue(savedText.contains("# Written by an external editor."))
+        XCTAssertEqual(try VisualConfigCodec.decode(savedText).accordionPadding, 45)
+        XCTAssertEqual(reloadCount, 1)
+        XCTAssertFalse(store.hasChanges)
+        guard case .saved = store.status else { return XCTFail("Saving after reload must succeed") }
+    }
+
+    func testSaveUpdatesUnchangedFileAndReloadsCandidate() async throws {
+        let url = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString + ".toml")
+        defer { try? FileManager.default.removeItem(at: url) }
+        try fixture.write(to: url, atomically: true, encoding: .utf8)
+        var reloadedText: String?
+        let store = VisualConfigSettingsStore(configLocation: url, reload: { reloadUrl in
+            reloadedText = try? String(contentsOf: reloadUrl, encoding: .utf8)
+            return ReloadConfigResult(isOk: true, stdout: "", stderr: "")
+        })
+        store.draft.accordionPadding = 45
+        let candidate = store.previewText
+
+        await store.save()
+
+        XCTAssertEqual(try String(contentsOf: url, encoding: .utf8), candidate)
+        XCTAssertEqual(reloadedText, candidate)
+        XCTAssertFalse(store.hasChanges)
+        guard case .saved = store.status else { return XCTFail("Saving an unchanged source file must succeed") }
+    }
+
+    func testEditsDuringReloadRemainPendingAfterSave() async throws {
+        let url = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString + ".toml")
+        defer { try? FileManager.default.removeItem(at: url) }
+        try fixture.write(to: url, atomically: true, encoding: .utf8)
+        var editDuringReload: (() -> Void)?
+        let store = VisualConfigSettingsStore(configLocation: url, reload: { _ in
+            editDuringReload?()
+            return ReloadConfigResult(isOk: true, stdout: "", stderr: "")
+        })
+        store.draft.accordionPadding = 45
+        editDuringReload = { store.draft.accordionPadding = 60 }
+
+        await store.save()
+
+        XCTAssertEqual(try VisualConfigCodec.decode(String(contentsOf: url, encoding: .utf8)).accordionPadding, 45)
+        XCTAssertEqual(store.draft.accordionPadding, 60)
+        XCTAssertTrue(store.hasChanges)
+        XCTAssertEqual(try VisualConfigCodec.decode(store.previewText).accordionPadding, 60)
+
+        editDuringReload = nil
+        await store.save()
+
+        XCTAssertEqual(try VisualConfigCodec.decode(String(contentsOf: url, encoding: .utf8)).accordionPadding, 60)
+        XCTAssertFalse(store.hasChanges)
+    }
+
     func testScalarAndTableEditsPreserveCommentsAndProduceValidConfig() throws {
         let original = try VisualConfigCodec.decode(fixture)
         var draft = original

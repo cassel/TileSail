@@ -23,3 +23,7 @@
 # XCode User settings
 xcuserdata/
 xcshareddata/
+
+# Python fixture/runtime caches
+__pycache__/
+*.py[cod]

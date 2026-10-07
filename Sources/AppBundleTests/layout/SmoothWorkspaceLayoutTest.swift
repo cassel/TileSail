@@ -1,6 +1,17 @@
 @testable import AppBundle
 import XCTest
 
+private struct SameNamedMonitor: MonitorInfo {
+    let stableIdentifier: String
+    let monitorAppKitNsScreenScreensId: Int
+    var name: String { "Identical Display" }
+    var rect: Rect { Rect(topLeftX: CGFloat(monitorAppKitNsScreenScreensId - 1) * 1920, topLeftY: 0, width: 1920, height: 1080) }
+    var visibleRect: Rect { rect }
+    var width: CGFloat { rect.width }
+    var height: CGFloat { rect.height }
+    var isMain: Bool { monitorAppKitNsScreenScreensId == 1 }
+}
+
 @MainActor
 final class SmoothWorkspaceLayoutTest: XCTestCase {
     override func setUp() async throws { setUpWorkspacesForTests() }
@@ -196,6 +207,38 @@ final class SmoothWorkspaceLayoutTest: XCTestCase {
 
         assertEquals(source.rootTilingContainer.allLeafWindowsRecursive.count, 3)
         assertEquals(destination.rootTilingContainer.allLeafWindowsRecursive.count, 2)
+    }
+
+    func testMonitorLimitKeepsSameNamedDisplaysAndTheirProfilesSeparate() {
+        let firstMonitor = SameNamedMonitor(stableIdentifier: "display-a", monitorAppKitNsScreenScreensId: 1)
+        let secondMonitor = SameNamedMonitor(stableIdentifier: "display-b", monitorAppKitNsScreenScreensId: 2)
+        var firstProfile = profile(style: .grid)
+        firstProfile.monitorIdentifier = firstMonitor.stableIdentifier
+        firstProfile.monitorName = firstMonitor.name
+        firstProfile.tileLimit = 2
+        var secondProfile = firstProfile
+        secondProfile.monitorIdentifier = secondMonitor.stableIdentifier
+        secondProfile.tileLimit = 4
+        SmoothLayoutSettingsStore.shared.replaceProfilesForTests([
+            firstMonitor.stableIdentifier: firstProfile,
+            secondMonitor.stableIdentifier: secondProfile,
+        ])
+        let firstSource = Workspace.get(byName: "a-source")
+        let firstDestination = Workspace.get(byName: "b-destination")
+        let secondSource = Workspace.get(byName: "c-source")
+        let secondDestination = Workspace.get(byName: "d-destination")
+        (1 ... 3).forEach { TestWindow.new(id: UInt32($0), parent: firstSource.rootTilingContainer) }
+        (4 ... 8).forEach { TestWindow.new(id: UInt32($0), parent: secondSource.rootTilingContainer) }
+
+        enforceSmoothMonitorTileLimits(
+            workspaces: [firstSource, firstDestination, secondSource, secondDestination],
+            monitorForWorkspace: { $0.name.hasPrefix("a-") || $0.name.hasPrefix("b-") ? firstMonitor : secondMonitor },
+        )
+
+        assertEquals(firstSource.rootTilingContainer.allLeafWindowsRecursive.map(\.windowId), [1, 2])
+        assertEquals(firstDestination.rootTilingContainer.allLeafWindowsRecursive.map(\.windowId), [3])
+        assertEquals(secondSource.rootTilingContainer.allLeafWindowsRecursive.map(\.windowId), [4, 5, 6, 7])
+        assertEquals(secondDestination.rootTilingContainer.allLeafWindowsRecursive.map(\.windowId), [8])
     }
 
     func testManualStylePreservesCustomTreeOrderAndWeights() {

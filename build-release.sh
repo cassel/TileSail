@@ -109,6 +109,16 @@ check-contains-hash .release/aerospace
 codesign -v .release/TileSail.app
 codesign -v .release/aerospace
 
+# Bind the native migration inputs to this jointly built release.
+python3 - <<'PYMANIFEST'
+import hashlib
+import json
+from pathlib import Path
+root = Path('.release')
+paths = ['TileSail.app/Contents/MacOS/TileSail', 'tilesail', 'aerospace']
+(root / 'install-manifest.json').write_text(json.dumps({p: hashlib.sha256((root / p).read_bytes()).hexdigest() for p in paths}, indent=2) + '\n')
+PYMANIFEST
+
 ############
 ### PACK ###
 ############
@@ -119,5 +129,6 @@ cp -r .shell-completion ".release/TileSail-v$build_version/shell-completion"
 cd .release
     mkdir -p "TileSail-v$build_version/bin" && cp -r aerospace tilesail "TileSail-v$build_version/bin"
     cp -r TileSail.app "TileSail-v$build_version"
+    python3 ../script/package-install-manifest.py install-manifest.json "TileSail-v$build_version/install-manifest.json"
     zip -r "TileSail-v$build_version.zip" "TileSail-v$build_version"
 cd -

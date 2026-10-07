@@ -2,8 +2,11 @@ import Network
 import Foundation
 
 extension NWConnection {
+    public static let maximumFrameSize = 16 * 1024 * 1024
+
     public func writeAtomic(_ msg: Codable, _ encoder: JSONEncoder = JSONEncoder()) async -> ((), error: NWError?) {
         let payload = Result { try encoder.encode(msg) }.getOrDie()
+        guard payload.count <= Self.maximumFrameSize else { return ((), .posix(.EMSGSIZE)) }
         var data = unsafe withUnsafeBytes(of: UInt32(payload.count)) { pointer in unsafe Data.init(pointer) }
         check(data.count == 4)
         data.append(payload)
@@ -63,12 +66,20 @@ extension NWConnection {
     }
 
     private func read(bytes size: Int) async -> Result<Data, NWError> {
+        guard size <= Self.maximumFrameSize else { return .failure(.posix(.EMSGSIZE)) }
         var data = Data(capacity: size)
         while data.count < size {
             let remaining = size - data.count
             let chunk: Result<Data, NWError> = await withCheckedContinuation { cont in
                 receive(minimumIncompleteLength: remaining, maximumLength: remaining) { data, context, isComplete, error in
-                    cont.resume(returning: error.map(Result.failure) ?? Result.success(data ?? Data()))
+                    if let error {
+                        cont.resume(returning: .failure(error))
+                    } else if let data, !data.isEmpty {
+                        cont.resume(returning: .success(data))
+                    } else {
+                        // A graceful EOF is not an NWError. Stop instead of issuing reads forever.
+                        cont.resume(returning: .failure(.posix(.ECONNRESET)))
+                    }
                 }
             }
             switch chunk {
@@ -83,7 +94,7 @@ extension NWConnection {
     public func readTillError() async {
         while true {
             let isError = await withCheckedContinuation { cont in
-                receive(minimumIncompleteLength: 1, maximumLength: Int.max) { data, context, isComplete, error in
+                receive(minimumIncompleteLength: 1, maximumLength: 64 * 1024) { data, context, isComplete, error in
                     cont.resume(returning: error != nil || data == nil || data?.count == 0)
                 }
             }
@@ -93,7 +104,7 @@ extension NWConnection {
 
     public func readUInt32() async -> Result<UInt32, NWError> {
         await read(bytes: 4).map { data in
-            unsafe data.withUnsafeBytes { pointer in unsafe pointer.load(as: UInt32.self) }
+            unsafe data.withUnsafeBytes { pointer in unsafe pointer.loadUnaligned(as: UInt32.self) }
         }
     }
 

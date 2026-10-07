@@ -24,6 +24,16 @@ extension String {
 
 func parseShell(_ tokens: [LexerToken]) -> ResOrStr<Shell<[String]>> {
     Result { () throws(String) in
+        var depth = 0
+        for token in tokens {
+            switch token.payload {
+                case .lParen:
+                    depth += 1
+                    if depth > 128 { throw "\(token.location): Maximum shell grouping depth of 128 exceeded" }
+                case .rParen: depth = max(0, depth - 1)
+                default: break
+            }
+        }
         switch tokens.singleOrNil() {
             case let single? where single.payload == .end:
                 return .empty

@@ -34,6 +34,9 @@ private func _shellLexerTokens(_ str: String) throws(String) -> [LexerToken] {
                 state = .skipWhitespaces
             case (.comment, _): break // Skip comment
 
+            case (.quotedWord(quoteChar: "\""), "\"") where array.getOrNil(atIndex: index)?.value == "\"":
+                word.append("\"")
+                index += 1
             case (.quotedWord(quoteChar: char.value), _): // Close quotes
                 try flushWord(.quoted)
                 state = .rightAfterQuotedWord

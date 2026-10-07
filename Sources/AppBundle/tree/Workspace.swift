@@ -132,18 +132,59 @@ extension Workspace {
     }
 }
 
+@MainActor
+func cachedWorkspaceForMonitor(
+    identifier: String,
+    origin: CGPoint,
+    identities: [CGPoint: String],
+    workspaces: [CGPoint: Workspace],
+) -> Workspace? {
+    if identities[origin] == identifier, let workspace = workspaces[origin] {
+        return workspace
+    }
+    guard let currentOrigin = identities.first(where: { $0.value == identifier })?.key else { return nil }
+    return workspaces[currentOrigin]
+}
+
 extension MonitorInfo {
     @MainActor
     var activeWorkspace: Workspace {
         gcMonitors()
-        if let existing = screenPointToVisibleWorkspace[rect.topLeftCorner] {
+        if let existing = cachedWorkspaceForMonitor(
+            identifier: stableIdentifier, origin: rect.topLeftCorner,
+            identities: screenPointToMonitorIdentity, workspaces: screenPointToVisibleWorkspace,
+        ) {
             return existing
         }
         // What if monitor configuration changed? (frame.origin is changed)
         rearrangeWorkspacesOnMonitors()
-        // Normally, recursion should happen only once more because we must take the value from the cache
-        // (Unless, monitor configuration data race happens)
-        return self.activeWorkspace
+        if let existing = cachedWorkspaceForMonitor(
+            identifier: stableIdentifier, origin: rect.topLeftCorner,
+            identities: screenPointToMonitorIdentity, workspaces: screenPointToVisibleWorkspace,
+        ) {
+            return existing
+        }
+        // An AX await can leave the caller holding a monitor that has since
+        // disconnected or moved. Resolve its current identity before falling
+        // back to an available display; never recurse on the stale origin.
+        let monitors = monitorInfos
+        if let current = monitors.first(where: { $0.stableIdentifier == stableIdentifier })
+            ?? monitors.first(where: \.isMain) ?? monitors.first,
+           let existing = screenPointToVisibleWorkspace[current.rect.topLeftCorner]
+        {
+            return existing
+        }
+        // NSScreen can briefly be empty during display reconfiguration. Keep
+        // the last cached workspace without declaring a fictitious screen active.
+        if let point = screenPointToMonitorIdentity.first(where: { $0.value == stableIdentifier })?.key,
+           let existing = screenPointToVisibleWorkspace[point]
+        {
+            return existing
+        }
+        if let existing = screenPointToVisibleWorkspace.values.sorted().first {
+            return existing
+        }
+        return Workspace.get(byName: config.persistentWorkspaces.first ?? "1")
     }
 
     @MainActor

@@ -24,17 +24,30 @@ struct Main {
         }
 
         if args.first == "--version" || args.first == "-v" {
-            let connection = NWConnection(to: NWEndpoint.unix(path: socketPath), using: .tcp)
+            let endpoint = SocketEndpoint()
+            let connection: NWConnection?
+            do {
+                try endpoint.validateClient()
+                connection = NWConnection(to: .unix(path: endpoint.path), using: .tcp)
+            } catch {
+                eprint(error.localizedDescription + " Upgrade TileSail.app and both CLIs together.")
+                connection = nil
+            }
             let serverVersionAndHash: String?
-            switch await connection.initConnection().error {
-                case nil:
-                    let ans = await run(connection, [], stdin: "", windowId: nil, workspace: nil, failExitCode: EXIT_CODE_TWO)
-                    serverVersionAndHash = ans.serverVersionAndHash
-                case .nwError(let e):
-                    eprint(e.localizedDescription)
-                    serverVersionAndHash = nil
-                case .customError(let msg):
-                    exit(EXIT_CODE_TWO, err: msg)
+            if let connection {
+                defer { connection.cancel() }
+                switch await connection.initConnection().error {
+                    case nil:
+                        let ans = await run(connection, [], stdin: "", windowId: nil, workspace: nil, failExitCode: EXIT_CODE_TWO)
+                        serverVersionAndHash = ans.serverVersionAndHash
+                    case .nwError(let e):
+                        eprint(e.localizedDescription)
+                        serverVersionAndHash = nil
+                    case .customError(let msg):
+                        exit(EXIT_CODE_TWO, err: msg)
+                }
+            } else {
+                serverVersionAndHash = nil
             }
             print(
                 """
@@ -67,7 +80,7 @@ struct Main {
 
         let failExitCode = parsedArgs.failExitCode
 
-        let connection = NWConnection(to: NWEndpoint.unix(path: socketPath), using: .tcp)
+        let connection = checkedConnection(failExitCode: failExitCode)
 
         switch await connection.initConnection().error {
             case nil: break
@@ -165,4 +178,10 @@ func run(_ connection: NWConnection, _ args: StrArrSlice, stdin: String, windowI
         case .failure(let error):
             exit(failExitCode, err: "Failed to read from server socket: \(error)")
     }
+}
+
+private func checkedConnection(failExitCode: Int32) -> NWConnection {
+    do { try SocketEndpoint().validateClient() }
+    catch { exit(failExitCode, err: error.localizedDescription + " Upgrade TileSail.app and both CLIs together.") }
+    return NWConnection(to: .unix(path: socketPath), using: .tcp)
 }

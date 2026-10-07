@@ -16,6 +16,8 @@ jobs:
     steps:
       - uses: actions/checkout@v6
       - run: ./.github/gh-actions-runner-xcode-select.sh
+      - name: Migration and cleanup fixtures
+        run: python3 -m unittest discover -s script/tests -v
       - name: Test
         run: swift test
       - name: Build TileSail app

@@ -3,7 +3,8 @@ import Common
 import Network
 
 func startUnixSocketServer() {
-    try? FileManager.default.removeItem(atPath: socketPath)
+    do { try SocketEndpoint().prepareServer() }
+    catch { exit(EXIT_CODE_TWO, err: error.localizedDescription) }
     let params = NWParameters.tcp
     params.requiredLocalEndpoint = .unix(path: socketPath)
     let listener = Result { try NWListener(using: params) }.getOrDie()
@@ -20,7 +21,10 @@ func startUnixSocketServer() {
 func toggleReleaseServerIfDebug(_ state: EnableCmdArgs.State) async {
     if serverArgs.isReadOnly { return }
     if !isDebug { return }
-    let socketFile = "/tmp/\(stableAeroSpaceAppId)-\(unixUserName).sock"
+    let endpoint = SocketEndpoint(bundleId: stableAeroSpaceAppId)
+    do { try endpoint.validateClient() }
+    catch { eprint(error.localizedDescription); return }
+    let socketFile = endpoint.path
     let connection = NWConnection(to: NWEndpoint.unix(path: socketFile), using: .tcp)
     defer { connection.cancel() }
     if await connection.initConnection().error != nil { // Can't connect, AeroSpace.app is not running
@@ -34,13 +38,29 @@ func toggleReleaseServerIfDebug(_ state: EnableCmdArgs.State) async {
 
 private let serverVersionAndHash = "\(aeroSpaceAppVersion) \(gitHash)"
 
+func sendServerAnswer(_ answer: ServerAnswer, over connection: NWConnection) async {
+    guard let error = await connection.writeAtomic(answer).error else { return }
+    guard error == .posix(.EMSGSIZE) else {
+        connection.cancel()
+        return
+    }
+    let fallback = ServerAnswer(
+        exitCode: EXIT_CODE_TWO,
+        stderr: "Command output exceeded the 16 MiB response limit. Reduce the output with filters or a shorter format.",
+        serverVersionAndHash: answer.serverVersionAndHash,
+    )
+    if await connection.writeAtomic(fallback).error != nil {
+        connection.cancel()
+    }
+}
+
 private func newConnection(_ connection: NWConnection) async { // todo add exit codes
     func answerToClient(exitCode: Int32, stdout: String = "", stderr: String = "") async {
         let ans = ServerAnswer(exitCode: exitCode, stdout: stdout, stderr: stderr, serverVersionAndHash: serverVersionAndHash)
         await answerToClient(ans)
     }
     func answerToClient(_ ans: ServerAnswer) async {
-        _ = await connection.writeAtomic(ans)
+        await sendServerAnswer(ans, over: connection)
     }
 
     guard let clientVersion = await connection.readUInt32().getIgnoringErrorsOrNil() else { return }

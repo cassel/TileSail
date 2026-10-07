@@ -140,7 +140,9 @@ struct VisualWindowRule: Identifiable, Equatable, Sendable {
     }
 
     private static func shellQuote(_ value: String) -> String {
-        "'\(value)'"
+        if !value.contains("'") { return "'\(value)'" }
+        let escaped = value.replacingOccurrences(of: "\"", with: "\"\"")
+        return "\"\(escaped)\""
     }
 
     private static func literalText(fromEscapedRegex pattern: String) -> String? {
@@ -669,16 +671,23 @@ final class VisualConfigSettingsStore: ObservableObject {
     private var originalDraft = VisualConfigDraft()
     private var originalText = ""
     private var configFileUrl: URL?
+    private let configLocation: URL?
+    private let reload: (URL) async -> ReloadConfigResult
 
     var hasChanges: Bool { draft != originalDraft }
     var previewText: String { VisualConfigCodec.patch(originalText, from: originalDraft, to: draft) }
 
-    init() {
+    init(
+        configLocation: URL? = nil,
+        reload: @escaping (URL) async -> ReloadConfigResult = { await reloadConfig_nonCancellable(forceConfigUrl: $0) },
+    ) {
+        self.configLocation = configLocation
+        self.reload = reload
         load()
     }
 
     func load() {
-        let url = findCustomConfigUrl().urlOrNil ?? configUrl
+        let url = configLocation ?? findCustomConfigUrl().urlOrNil ?? configUrl
         do {
             let text = try String(contentsOf: url, encoding: .utf8)
             let decoded = try VisualConfigCodec.decode(text)
@@ -704,21 +713,27 @@ final class VisualConfigSettingsStore: ObservableObject {
             return
         }
         status = .saving
-        let candidate = previewText
+        let savedDraft = draft
+        let candidate = VisualConfigCodec.patch(originalText, from: originalDraft, to: savedDraft)
         let parsed = parseConfig(candidate)
         guard parsed.errors.isEmpty else {
             status = .failed(parsed.errors.map { $0.description(.error) }.joined(separator: "\n"))
             return
         }
         do {
+            let diskText = try String(contentsOf: url, encoding: .utf8)
+            guard diskText == originalText else {
+                status = .failed("The configuration changed on disk. Save your pending edits elsewhere, then choose Reload from Disk and apply them again.")
+                return
+            }
             try Data(candidate.utf8).write(to: url, options: .atomic)
-            let reload = await reloadConfig_nonCancellable(forceConfigUrl: url)
+            let reload = await self.reload(url)
             guard reload.isOk else {
                 status = .failed(reload.stdout.isEmpty ? reload.stderr : reload.stdout)
                 return
             }
             originalText = candidate
-            originalDraft = draft
+            originalDraft = savedDraft
             let warning = reload.stderr.isEmpty ? "Configuration saved and applied." : "Saved with warnings: \(reload.stderr)"
             status = .saved(warning)
         } catch {

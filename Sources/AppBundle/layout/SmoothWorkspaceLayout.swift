@@ -248,17 +248,29 @@ private func smoothTreeShape(_ node: TreeNode) -> SmoothTreeShape {
 
 @MainActor
 private func enforceSmoothMonitorTileLimits() {
+    enforceSmoothMonitorTileLimits(
+        workspaces: Workspace.all.filter(\.isUserFacing),
+        monitorForWorkspace: { $0.workspaceMonitor },
+    )
+}
+
+@MainActor
+func enforceSmoothMonitorTileLimits(
+    workspaces: [Workspace],
+    monitorForWorkspace: (Workspace) -> any MonitorInfo,
+) {
     let persistentOrder = Dictionary(
         uniqueKeysWithValues: config.persistentWorkspaces.enumerated().map { ($0.element, $0.offset) },
     )
-    let groupedWorkspaces = Dictionary(grouping: Workspace.all.filter(\.isUserFacing)) { $0.workspaceMonitor.name }
+    let groupedWorkspaces = Dictionary(grouping: workspaces) { monitorForWorkspace($0).stableIdentifier }
 
     for (_, unsortedWorkspaces) in groupedWorkspaces {
         let workspaces = unsortedWorkspaces.sorted {
             (persistentOrder[$0.name] ?? Int.max, $0.name) <
                 (persistentOrder[$1.name] ?? Int.max, $1.name)
         }
-        guard let monitor = workspaces.first?.workspaceMonitor else { continue }
+        guard let firstWorkspace = workspaces.first else { continue }
+        let monitor = monitorForWorkspace(firstWorkspace)
         let profile = SmoothLayoutSettingsStore.shared.profile(for: monitor)
         guard profile.enabled else { continue }
 

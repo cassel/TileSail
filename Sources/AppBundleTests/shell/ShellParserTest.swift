@@ -3,6 +3,15 @@ import Common
 import XCTest
 
 final class ShellParserTest: XCTestCase {
+    func testGroupingBound() {
+        let boundary = String(repeating: "(", count: 128) + "true" + String(repeating: ")", count: 128)
+        assertSucc(boundary.lexAndParseShell(), .cmd("true"))
+        assertSucc((boundary + ";" + boundary).lexAndParseShell(), .seq("true", "true"))
+        assertFail(("(" + boundary + ")").lexAndParseShell(), "Line 1 Column 129: Maximum shell grouping depth of 128 exceeded")
+        let literal = String(repeating: "(", count: 129)
+        assertSucc(("echo '" + literal + "' # " + literal).lexAndParseShell(), .cmd("echo", literal))
+    }
+
     func testParser() {
         assertSucc("echo foo && bar".lexAndParseShell(), .and(.cmd("echo", "foo"), "bar"))
         assertSucc("foo && bar || baz".lexAndParseShell(), .or(.and("foo", "bar"), "baz"))
@@ -34,6 +43,14 @@ final class ShellParserTest: XCTestCase {
         assertSucc("   ".lexAndParseShell(), .empty)
         assertSucc("\t".lexAndParseShell(), .empty)
         assertSucc("# only a comment".lexAndParseShell(), .empty)
+    }
+
+    func testDoubledDoubleQuotesStayInsideOneArgumentAndPreserveBackslashes() {
+        assertSucc(#"echo "both'""quotes\and;close""#.lexAndParseShell(), .cmd(["echo", "both'\"quotes\\and;close"]))
+        assertSucc(#"echo "\\literal""#.lexAndParseShell(), .cmd(["echo", #"\\literal"#]))
+        assertSucc(#"echo "trailing\""#.lexAndParseShell(), .cmd(["echo", #"trailing\"#]))
+        assertSucc(#"echo "\x{27}\w""#.lexAndParseShell(), .cmd(["echo", #"\x{27}\w"#]))
+        assertSucc(#"echo '\\literal'"#.lexAndParseShell(), .cmd(["echo", #"\\literal"#]))
     }
 
     func testParserSingleCommand() {
