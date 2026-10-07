@@ -33,7 +33,7 @@ enum SmoothLayoutStyle: String, Codable, CaseIterable, Identifiable, Sendable {
             case .rows: "Windows are stacked with equal heights."
             case .dwindle: "A large primary window with a tail alternating right and down."
             case .verticalPairs: "Stacked rows containing up to two windows each."
-            case .grid: "A balanced grid of rows and columns."
+            case .grid: "Equal-sized windows in complete rows and columns."
         }
     }
 
@@ -41,6 +41,26 @@ enum SmoothLayoutStyle: String, Codable, CaseIterable, Identifiable, Sendable {
         windowCount == 1
             ? [.fullscreen, .manual]
             : [.dwindle, .verticalPairs, .grid, .columns, .rows, .manual]
+    }
+}
+
+/// Choose a complete rectangle, then favor cells closest to square on this monitor.
+/// Restricting columns to divisors prevents an oversized incomplete final row.
+enum SmoothGridGeometry {
+    static func columnCount(count: Int, aspectRatio: Double) -> Int {
+        guard count > 1 else { return 1 }
+        let aspect = aspectRatio.isFinite && aspectRatio > 0 ? aspectRatio : 1
+        var bestColumns = 1
+        var bestScore = Double.infinity
+        for columns in 1 ... count where count.isMultiple(of: columns) {
+            let rows = count / columns
+            let score = abs(log(aspect * Double(rows) / Double(columns)))
+            if score < bestScore {
+                bestColumns = columns
+                bestScore = score
+            }
+        }
+        return bestColumns
     }
 }
 

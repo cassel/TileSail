@@ -1842,7 +1842,7 @@ enum SmoothLayoutPreviewGeometry {
                 return rowFrames(count: count, columnsPerRow: 2)
             case .grid:
                 let aspectRatio = monitorIsHorizontal ? 16.0 / 9.0 : 9.0 / 16.0
-                let columns = min(count, max(1, Int(ceil(sqrt(Double(count) * aspectRatio)))))
+                let columns = SmoothGridGeometry.columnCount(count: count, aspectRatio: aspectRatio)
                 return rowFrames(count: count, columnsPerRow: columns)
         }
     }

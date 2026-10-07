@@ -154,6 +154,38 @@ final class PersistentManualLayoutsTest: XCTestCase {
         XCTAssertTrue(window.parent === original.floatingWindowsContainer)
     }
 
+    func testStartupRestoresFloatingStateWithinSameWorkspace() async throws {
+        let suite = "PersistentManualLayoutsTest.\(UUID().uuidString)"
+        let defaults = try XCTUnwrap(UserDefaults(suiteName: suite))
+        defer { defaults.removePersistentDomain(forName: suite) }
+        let store = PersistentManualLayoutStore(defaults: defaults)
+        let workspace = Workspace.get(byName: name)
+        let window = TestWindow.new(id: 204, parent: workspace.floatingWindowsContainer)
+        await store.capture()
+        window.bind(to: workspace.rootTilingContainer, adaptiveWeight: 1, index: INDEX_BIND_LAST)
+        let reloaded = PersistentManualLayoutStore(defaults: defaults)
+        await reloaded.restoreAfterInitialRefresh()
+        XCTAssertTrue(window.parent === workspace.floatingWindowsContainer)
+        await reloaded.restoreAfterInitialRefresh()
+        XCTAssertTrue(window.parent === workspace.floatingWindowsContainer)
+        XCTAssertEqual(workspace.floatingWindows.count, 1)
+    }
+
+    func testStartupRestoresTiledStateWithinSameWorkspace() async throws {
+        let suite = "PersistentManualLayoutsTest.\(UUID().uuidString)"
+        let defaults = try XCTUnwrap(UserDefaults(suiteName: suite))
+        defer { defaults.removePersistentDomain(forName: suite) }
+        let store = PersistentManualLayoutStore(defaults: defaults)
+        let workspace = Workspace.get(byName: name)
+        let window = TestWindow.new(id: 205, parent: workspace.rootTilingContainer)
+        await store.capture()
+        window.bindAsFloatingWindow(to: workspace)
+        let reloaded = PersistentManualLayoutStore(defaults: defaults)
+        await reloaded.restoreAfterInitialRefresh()
+        XCTAssertTrue(window.parent === workspace.rootTilingContainer)
+        XCTAssertTrue(workspace.floatingWindows.isEmpty)
+    }
+
     func testStartupMatchesStableNativeIdAfterTitleChanges() async throws {
         defer { _ = mainMonitorInfo.setActiveWorkspace(Workspace.get(byName: "setUpWorkspacesForTests")) }
         let suite = "PersistentManualLayoutsTest.\(UUID().uuidString)"

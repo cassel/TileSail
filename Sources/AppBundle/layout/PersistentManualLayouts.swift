@@ -229,10 +229,12 @@ final class PersistentManualLayoutStore: ObservableObject {
                 }.count == 1 && identities[candidates[0].windowId]?.title == identity.title
                 guard let window = sameNative ?? (uniqueTitle ? candidates.first : nil) else { continue }
                 used.insert(window.windowId)
-                if window.nodeWorkspace != workspace {
-                    if (saved.floatingWindows ?? []).contains(identity) {
+                if (saved.floatingWindows ?? []).contains(identity) {
+                    if window.parent !== workspace.floatingWindowsContainer {
                         window.bindAsFloatingWindow(to: workspace)
-                    } else {
+                    }
+                } else {
+                    if window.nodeWorkspace != workspace || window.parent === workspace.floatingWindowsContainer {
                         window.bind(to: workspace.rootTilingContainer, adaptiveWeight: 1, index: INDEX_BIND_LAST)
                     }
                 }

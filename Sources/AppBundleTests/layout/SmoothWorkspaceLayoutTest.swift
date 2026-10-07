@@ -16,6 +16,45 @@ private struct SameNamedMonitor: MonitorInfo {
 final class SmoothWorkspaceLayoutTest: XCTestCase {
     override func setUp() async throws { setUpWorkspacesForTests() }
 
+    func testGridUsesCompleteEqualRowsForFourAndSixWindows() {
+        for (count, columns) in [(4, 2), (6, 3)] {
+            setUpWorkspacesForTests()
+            enableStyle(.grid)
+            let root = Workspace.get(byName: name).rootTilingContainer
+            (1 ... count).forEach { TestWindow.new(id: UInt32($0), parent: root) }
+            reconcileSmoothWorkspaceLayouts()
+            assertEquals(root.layoutDescription, .v_tiles([
+                .h_tiles((1 ... columns).map { .window(UInt32($0)) }),
+                .h_tiles(((columns + 1) ... count).map { .window(UInt32($0)) }),
+            ]))
+        }
+    }
+
+    func testGridPreviewHasEqualCellsAndFillsMonitor() {
+        for horizontal in [true, false] {
+            for count in 1 ... 10 {
+                let frames = SmoothLayoutPreviewGeometry.frames(
+                    style: .grid, count: count, monitorIsHorizontal: horizontal,
+                )
+                XCTAssertEqual(frames.count, count)
+                for frame in frames {
+                    XCTAssertEqual(frame.width, frames[0].width, accuracy: 0.000001)
+                    XCTAssertEqual(frame.height, frames[0].height, accuracy: 0.000001)
+                }
+                XCTAssertEqual(frames.reduce(0) { $0 + $1.width * $1.height }, 1, accuracy: 0.000001)
+                for i in frames.indices {
+                    for j in frames.indices where j > i {
+                        let overlap = frames[i].intersection(frames[j])
+                        XCTAssertTrue(overlap.isNull || overlap.width * overlap.height < 0.000001)
+                    }
+                }
+            }
+        }
+        XCTAssertEqual(SmoothGridGeometry.columnCount(count: 4, aspectRatio: 3780.0 / 2160), 2)
+        XCTAssertEqual(SmoothGridGeometry.columnCount(count: 6, aspectRatio: 3780.0 / 2160), 3)
+        XCTAssertEqual(SmoothGridGeometry.columnCount(count: 6, aspectRatio: 2160.0 / 3780), 2)
+    }
+
     func testDwindleSequencesFromOneThroughTenWindows() {
         for count in 1 ... 10 {
             setUpWorkspacesForTests()

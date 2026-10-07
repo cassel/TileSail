@@ -395,10 +395,9 @@ extension Workspace {
 
             case .grid:
                 configureRoot(root, orientation: .v)
-                let aspectRatio = max(Double(monitor.width / monitor.height), 0.1)
-                let columnCount = min(
-                    windows.count,
-                    max(1, Int(ceil(sqrt(Double(windows.count) * aspectRatio)))),
+                let columnCount = SmoothGridGeometry.columnCount(
+                    count: windows.count,
+                    aspectRatio: Double(monitor.width / monitor.height),
                 )
                 buildRows(windows, in: root, columnsPerRow: columnCount)
         }
