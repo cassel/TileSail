@@ -22,3 +22,5 @@ Correct startup restoration so a saved floating window regains its floating stat
 ## Review Triage Log
 
 - Independent blind review: no substantiated actionable findings. Confirmed discovery precedes placement restoration and both state transitions are covered. No review findings deferred.
+- Live verification exposed explicit floating startup rules being overwritten by saved tiled classification (Numi). Patched successful startup layout commands to retain classification priority, including successful no-ops; clear transient overrides after placement restoration. Independent follow-up review found no actionable correctness findings.
+- Final verification: 521 Swift tests passed and the signed Xcode Debug build succeeded. Local install and reopen use a ZIP backup, matching CLI binaries and the existing configuration argument.

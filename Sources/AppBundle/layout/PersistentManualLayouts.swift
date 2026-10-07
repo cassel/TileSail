@@ -178,6 +178,7 @@ final class PersistentManualLayoutStore: ObservableObject {
     // Recover workspace membership before attempting to reconstruct individual trees.
     private func restoreWindowPlacement() async {
         let windows = Workspace.all.flatMap { $0.rootTilingContainer.allLeafWindowsRecursive + $0.floatingWindows }
+        defer { for window in windows { window.startupFloatingOverride = nil } }
         let identities = await windowIdentities(windows)
         let savedIdentities = layouts.values.flatMap { $0.root.windowIdentities + ($0.floatingWindows ?? []) }
         let claimants = Dictionary(grouping: layouts.values.flatMap { saved in
@@ -229,7 +230,8 @@ final class PersistentManualLayoutStore: ObservableObject {
                 }.count == 1 && identities[candidates[0].windowId]?.title == identity.title
                 guard let window = sameNative ?? (uniqueTitle ? candidates.first : nil) else { continue }
                 used.insert(window.windowId)
-                if (saved.floatingWindows ?? []).contains(identity) {
+                let restoreFloating = window.startupFloatingOverride ?? (saved.floatingWindows ?? []).contains(identity)
+                if restoreFloating {
                     if window.parent !== workspace.floatingWindowsContainer {
                         window.bindAsFloatingWindow(to: workspace)
                     }

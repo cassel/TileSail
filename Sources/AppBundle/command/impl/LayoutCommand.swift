@@ -6,6 +6,15 @@ struct LayoutCommand: Command {
     /*conforms*/ let shouldResetClosedWindowsCache = true
 
     func run(_ env: CmdEnv, _ io: CmdIo) async -> BinaryExitCode {
+        let window = args.root ? nil : args.resolveTargetOrReportError(env, CmdIoImpl.emptyStdinIgnoringOut)?.windowOrNil
+        let result = await runLayout(env, io)
+        if result == .succ, isStartup, let window {
+            window.startupFloatingOverride = window.isFloating
+        }
+        return result
+    }
+
+    @MainActor private func runLayout(_ env: CmdEnv, _ io: CmdIo) async -> BinaryExitCode {
         guard let target = args.resolveTargetOrReportError(env, io) else { return .fail }
 
         let node: ConventionalWindowParentCases

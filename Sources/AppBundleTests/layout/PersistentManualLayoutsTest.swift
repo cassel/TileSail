@@ -1,4 +1,5 @@
 @testable import AppBundle
+import Common
 import XCTest
 
 @MainActor
@@ -202,6 +203,43 @@ final class PersistentManualLayoutsTest: XCTestCase {
         let reloaded = PersistentManualLayoutStore(defaults: defaults)
         await reloaded.restoreAfterInitialRefresh()
         XCTAssertTrue(window.nodeWorkspace === original)
+    }
+
+    func testExplicitStartupFloatingRuleWinsOverSavedTiledClassification() async throws {
+        let suite = "PersistentManualLayoutsTest.\(UUID().uuidString)"
+        let defaults = try XCTUnwrap(UserDefaults(suiteName: suite))
+        defer { defaults.removePersistentDomain(forName: suite) }
+        let store = PersistentManualLayoutStore(defaults: defaults)
+        let workspace = Workspace.get(byName: name)
+        let window = TestWindow.new(id: 206, parent: workspace.rootTilingContainer)
+        await store.capture()
+        await $refreshSessionEvent.withValue(.startup) {
+            let result = await parseCommand("layout --window-id 206 floating").cmdOrDie.run(.defaultEnv, .emptyStdin)
+            XCTAssertEqual(result.exitCode.rawValue, 0)
+            // A repeated successful no-op rule must also retain priority.
+            await parseCommand("layout --window-id 206 floating").cmdOrDie.run(.defaultEnv, .emptyStdin)
+            XCTAssertEqual(window.startupFloatingOverride, true)
+            await store.restoreAfterInitialRefresh()
+        }
+        XCTAssertTrue(window.parent === workspace.floatingWindowsContainer)
+        XCTAssertNil(window.startupFloatingOverride)
+    }
+
+    func testExplicitStartupTilingRuleWinsOverSavedFloatingClassification() async throws {
+        let suite = "PersistentManualLayoutsTest.\(UUID().uuidString)"
+        let defaults = try XCTUnwrap(UserDefaults(suiteName: suite))
+        defer { defaults.removePersistentDomain(forName: suite) }
+        let store = PersistentManualLayoutStore(defaults: defaults)
+        let workspace = Workspace.get(byName: name)
+        let window = TestWindow.new(id: 207, parent: workspace.floatingWindowsContainer)
+        await store.capture()
+        await $refreshSessionEvent.withValue(.startup) {
+            let result = await parseCommand("layout --window-id 207 tiling").cmdOrDie.run(.defaultEnv, .emptyStdin)
+            XCTAssertEqual(result.exitCode.rawValue, 0)
+            await store.restoreAfterInitialRefresh()
+        }
+        XCTAssertTrue(window.parent === workspace.rootTilingContainer)
+        XCTAssertNil(window.startupFloatingOverride)
     }
 
 }

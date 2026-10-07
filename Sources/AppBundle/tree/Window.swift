@@ -13,6 +13,8 @@ open class Window: TreeNode, Hashable {
     var scratchpadIsPresented = false
     var scratchpadUsesNativeMinimize = false
     var persistentLayoutTitle: String?
+    // Successful startup layout commands take precedence over saved classification.
+    var startupFloatingOverride: Bool?
     // Owned minimization stays in the workspace tree; user minimization does not.
     var isWorkspaceNativeHidden = false
     var isWorkspaceRestorePending = false
