@@ -102,6 +102,21 @@ drop-in distribution for general users.
 
 ## Build and run
 
+A development DMG for Apple Silicon is available in the
+[2026-10-14 development release](https://github.com/cassel/TileSail/releases/tag/dev-2026.10.14).
+It requires macOS 13 or newer and uses the Debug bundle ID to preserve local
+Accessibility compatibility. It is ad-hoc signed and **not notarized**.
+Quit your existing window manager before replacing its app; keep the same
+installation path if your startup agent points there.
+
+To recreate the development installer after building the Debug app:
+
+```sh
+mkdir -p .local/installers
+bash script/package-dmg.sh .build/xcode/Build/Products/Debug/TileSail.app \
+  .local/installers/TileSail-dev-AppleSilicon.dmg
+```
+
 Requires macOS 13 or newer, Xcode with Swift 6.2 or newer, and Git.
 
 ```sh
