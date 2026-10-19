@@ -8,6 +8,9 @@ public func menuBar(viewModel: TrayMenuModel) -> some Scene { // todo should it 
         let identification      = "\(aeroSpaceAppName) v\(aeroSpaceAppVersion) \(gitHash)"
         Text(aeroSpaceAppName)
         Text("Version \(aeroSpaceAppVersion) (\(gitShortHash))")
+        Button("About TileSail…") {
+            showTileSailAboutPanel()
+        }
         Button {
             identification.copyToClipboard()
         } label: {

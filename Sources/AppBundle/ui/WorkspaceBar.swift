@@ -122,7 +122,7 @@ struct WorkspaceBarMenuOccupancy: Equatable, Sendable {
     }
 }
 
-private struct WorkspaceBarItem: Identifiable {
+private struct WorkspaceBarItem: Identifiable, Equatable {
     let name: String
     let isActive: Bool
     let isFocused: Bool
@@ -131,7 +131,7 @@ private struct WorkspaceBarItem: Identifiable {
     var id: String { name }
 }
 
-private struct WorkspaceBarSnapshot {
+private struct WorkspaceBarSnapshot: Equatable {
     let monitorName: String
     let items: [WorkspaceBarItem]
 }
@@ -141,6 +141,7 @@ final class WorkspaceBarController {
     static let shared = WorkspaceBarController()
 
     private var panels: [String: NSPanel] = [:]
+    private var snapshots: [String: WorkspaceBarSnapshot] = [:]
     private var geometries: [String: WorkspaceBarGeometry] = [:]
     private var menuOccupancy: WorkspaceBarMenuOccupancy?
     private var scanInProgress = false
@@ -196,6 +197,7 @@ final class WorkspaceBarController {
                     }
                 }
             }
+            timer?.tolerance = 0.5
         }
         scanMenuItemsIfNeeded()
         let monitors = sortedMonitorInfos
@@ -203,6 +205,7 @@ final class WorkspaceBarController {
         for identifier in panels.keys where !activeIdentifiers.contains(identifier) {
             panels.removeValue(forKey: identifier)?.close()
             geometries.removeValue(forKey: identifier)
+            snapshots.removeValue(forKey: identifier)
         }
 
         for monitor in monitors {
@@ -227,7 +230,14 @@ final class WorkspaceBarController {
             )
             let panel = panels[monitor.stableIdentifier] ?? makePanel()
             panels[monitor.stableIdentifier] = panel
-            panel.contentViewController = NSHostingController(rootView: WorkspaceBarView(snapshot: snapshot))
+            if snapshots[monitor.stableIdentifier] != snapshot {
+                if let controller = panel.contentViewController as? NSHostingController<WorkspaceBarView> {
+                    controller.rootView = WorkspaceBarView(snapshot: snapshot)
+                } else {
+                    panel.contentViewController = NSHostingController(rootView: WorkspaceBarView(snapshot: snapshot))
+                }
+                snapshots[monitor.stableIdentifier] = snapshot
+            }
             let width = min(screen.visibleFrame.width - 16, 30 + CGFloat(snapshot.items.count) * WorkspaceBarGeometry.dotPitch)
             let hasCameraHousing = screen.safeAreaInsets.top > 0 ||
                 (screen.auxiliaryTopLeftArea != nil && screen.auxiliaryTopRightArea != nil)
@@ -242,10 +252,10 @@ final class WorkspaceBarController {
             )
             geometries[monitor.stableIdentifier] = geometry
             panel.level = geometry.frame.minY >= screen.visibleFrame.maxY ? .statusBar : .floating
-            panel.setFrame(geometry.frame, display: true)
+            if panel.frame != geometry.frame { panel.setFrame(geometry.frame, display: true) }
             if snapshot.items.isEmpty {
                 panel.orderOut(nil)
-            } else {
+            } else if !panel.isVisible {
                 panel.orderFrontRegardless()
             }
         }
@@ -261,6 +271,7 @@ final class WorkspaceBarController {
         panel.backgroundColor = .clear
         panel.isOpaque = false
         panel.hasShadow = false
+        panel.animationBehavior = .none
         panel.level = .floating
         panel.hidesOnDeactivate = false
         panel.becomesKeyOnlyIfNeeded = true

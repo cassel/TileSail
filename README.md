@@ -7,7 +7,7 @@ TileSail is an independent macOS window manager derived from
 visual, multi-monitor tiling experience. Choose a layout for each display and
 window count, switch workspaces with the keyboard or a compact workspace bar,
 and manage settings through a native interface. TileSail keeps AeroSpace's tree,
-workspaces, CLI, and TOML configuration while adding coordinated animations,
+workspaces, CLI, and TOML configuration while adding instant window placement,
 workspace memory, layout restoration, and automatic adjustment around the Dock.
 
 > TileSail was previously developed as AeroSpaceSmooth. It is maintained independently
@@ -16,6 +16,8 @@ workspace memory, layout restoration, and automatic adjustment around the Dock.
 ## Features
 
 - A native menu-bar **Settings…** window, written in SwiftUI.
+- A standard **About TileSail…** panel with creator credits, version, support links,
+  and upstream MIT attribution.
 - Visual editing for General, Workspaces, Applications, Automation, Shortcuts,
   and the active TOML file, including an app picker for Floating/Tiled defaults.
 - Per-monitor automatic layout profiles for every window count from 1 through 10.
@@ -25,8 +27,10 @@ workspace memory, layout restoration, and automatic adjustment around the Dock.
   presets, Hybrid Dwindle, tile ordering, split controls, undo, and redo.
 - Configurable per-monitor window limits with overflow routed to another workspace
   on the same monitor.
-- Coordinated window animations with configurable duration and Reduce Motion support.
-- Detection of applications that repeatedly reject an animated size, preventing
+- Immediate window placement, resizing, and TileSail fullscreen without animation.
+  Legacy animation options remain accepted but no longer enable animation.
+  Native macOS minimize and fullscreen effects remain controlled by macOS.
+- Detection of applications that repeatedly reject a requested size, preventing
   resize feedback loops while still allowing their position to update.
 - Stable display profiles backed by hardware UUID, with migration from older
   display-name profiles.
@@ -87,8 +91,8 @@ use exact split controls, presets, Hybrid Dwindle, ordering, undo, and redo.
 
 ### General settings
 
-Configure startup, standard AeroSpace window-tree behavior, and coordinated window
-animations from the same native interface.
+Configure startup and standard AeroSpace window-tree behavior from the same native
+interface. Window transitions apply immediately.
 
 ![TileSail General settings](./docs/assets/aerospace-smooth-general.jpeg)
 
@@ -102,20 +106,36 @@ drop-in distribution for general users.
 
 ## Build and run
 
-A development DMG for Apple Silicon is available in the
-[2026-10-14 development release](https://github.com/cassel/TileSail/releases/tag/dev-2026.10.14).
-It requires macOS 13 or newer and uses the Debug bundle ID to preserve local
-Accessibility compatibility. It is ad-hoc signed and **not notarized**.
-Quit your existing window manager before replacing its app; keep the same
-installation path if your startup agent points there.
+Get installers and release notes from [GitHub Releases](https://github.com/cassel/TileSail/releases).
+The standard distribution is a universal **Release** build for Apple Silicon and
+Intel, packaged as `TileSail-VERSION-universal.dmg` with an Applications shortcut,
+installation instructions, checksums, build metadata, and MIT notices.
 
-To recreate the development installer after building the Debug app:
+Local packages are ad-hoc signed unless a valid distribution signature is already
+present. They are **not notarized**; read the signing status in the release notes
+and installer README. Quit your existing window manager before updating and
+preserve its installation path. Release uses `us.cassel.tilesail`; Debug keeps
+`bobko.aerospace.debug`, so switching can require Accessibility permission again.
+
+Build a versioned universal Release installer from committed sources:
 
 ```sh
-mkdir -p .local/installers
-bash script/package-dmg.sh .build/xcode/Build/Products/Debug/TileSail.app \
-  .local/installers/TileSail-dev-AppleSilicon.dmg
+bash script/build-dmg.sh 0.22.0-beta.1
 ```
+
+This stamps the About panel with the version and source commit, builds both CPU
+architectures, creates the DMG and SHA-256 sidecar, and restores the generated
+source placeholders afterward. Uncommitted source requires the explicit local
+preview option `TILESAIL_ALLOW_DIRTY_BUILD=1`; its metadata is marked dirty.
+
+To package an existing app instead, use `bash script/package-dmg.sh APP_PATH OUTPUT.dmg`.
+
+After tests pass, push the commit and a version tag such as `v0.22.0-beta.1` to
+`cassel/TileSail`. The release workflow builds and publishes the universal installer,
+checksum and metadata. Versions containing a suffix are marked as prereleases.
+For manual publishing, `script/publish-release.sh --build-version VERSION` creates
+a draft; append `--publish` to publish it. The helper rejects dirty builds,
+mismatched commits, Debug identities and installers missing an architecture.
 
 Requires macOS 13 or newer, Xcode with Swift 6.2 or newer, and Git.
 

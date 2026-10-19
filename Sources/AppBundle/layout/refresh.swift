@@ -174,7 +174,7 @@ private func layoutWorkspaces() async throws {
             for window in workspace.allLeafWindowsRecursive { try await window.asMacWindow().showForWorkspace() }
             try await workspace.layoutWorkspace(transaction) // Unhide tiling windows from corner
         }
-        LayoutAnimator.shared.apply(transaction, animated: false)
+        LayoutFrameApplier.shared.apply(transaction)
         return
     }
     let monitors = monitorInfos
@@ -184,7 +184,7 @@ private func layoutWorkspaces() async throws {
         for window in workspace.allLeafWindowsRecursive { try await window.asMacWindow().showForWorkspace() }
         try await workspace.layoutWorkspace(transaction)
     }
-    LayoutAnimator.shared.apply(transaction)
+    LayoutFrameApplier.shared.apply(transaction)
     for workspace in Workspace.all where !workspace.isVisible {
         for window in workspace.allLeafWindowsRecursive {
             try await window.asMacWindow().hideForWorkspace()

@@ -29,6 +29,10 @@ final class ConfigTest: XCTestCase {
         assertEquals(result.warnings, [])
     }
 
+    func testLayoutAnimationDefaultsToImmediate() {
+        XCTAssertEqual(Config().layoutAnimationDurationMs, 0)
+    }
+
     func testLayoutAnimationConfig() {
         let result = parseConfig(
             """

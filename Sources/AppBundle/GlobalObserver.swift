@@ -37,15 +37,17 @@ enum GlobalObserver {
     private static func observeVisibleFrames() {
         guard TrayMenuModel.shared.isEnabled, !frameScanInProgress else { return }
         frameScanInProgress = true
+        let preferences = UserDefaults(suiteName: "com.apple.dock")
+        let autohide = preferences?.bool(forKey: "autohide") == true
+        let edge = preferences?.string(forKey: "orientation") ?? "bottom"
         let pid = NSRunningApplication.runningApplications(withBundleIdentifier: "com.apple.dock").first?.processIdentifier
         Task.startUnstructured { @MainActor in
             defer { frameScanInProgress = false }
             let dockFrame = await Task.detached(priority: .utility) {
-                pid.flatMap { DockWorkArea.readFrame(pid: $0) }
+                autohide ? nil : pid.flatMap { DockWorkArea.readFrame(pid: $0) }
             }.value
-            let preferences = UserDefaults(suiteName: "com.apple.dock")
-            DockWorkArea.frame = preferences?.bool(forKey: "autohide") == true ? nil : dockFrame
-            DockWorkArea.edge = preferences?.string(forKey: "orientation") ?? "bottom"
+            DockWorkArea.frame = dockFrame
+            DockWorkArea.edge = edge
             let frames = Dictionary(uniqueKeysWithValues: monitorInfos.map { monitor in
                 let rect = DockWorkArea.adjusted(monitor.visibleRect, screen: monitor.rect)
                 return (monitor.monitorAppKitNsScreenScreensId, CGRect(origin: rect.topLeftCorner, size: rect.size))

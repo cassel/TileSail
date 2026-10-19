@@ -33,6 +33,7 @@ targets:
         # Specifies whether the app runs as an agent app. If this key is set to YES, Launch Services runs the app as an agent app.
         # Agent apps do not appear in the Dock or in the Force Quit window (cmd-opt-esc)
         INFOPLIST_KEY_LSUIElement: YES
+        INFOPLIST_KEY_NSHumanReadableCopyright: "Copyright © 2026 C. Cassel. Original AeroSpace © 2023 Nikita Bobko."
         CODE_SIGN_IDENTITY: ${XCODEGEN_AEROSPACE_CODE_SIGN_IDENTITY}
       configs:
         Debug:

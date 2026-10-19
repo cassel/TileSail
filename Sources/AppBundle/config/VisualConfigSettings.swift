@@ -219,7 +219,7 @@ struct VisualConfigDraft: Equatable, Sendable {
     var defaultRootLayout = "tiles"
     var defaultRootOrientation = "auto"
     var accordionPadding = 30
-    var layoutAnimationDurationMs = 160
+    var layoutAnimationDurationMs = 0
     var layoutAnimationRespectsReduceMotion = true
     var persistentWorkspaces: [String] = []
     var onFocusedMonitorChanged: [String] = []
@@ -271,7 +271,7 @@ enum VisualConfigCodec {
             defaultRootLayout: root["default-root-container-layout"]?.asStringOrNil ?? "tiles",
             defaultRootOrientation: root["default-root-container-orientation"]?.asStringOrNil ?? "auto",
             accordionPadding: root["accordion-padding"]?.asIntOrNil ?? 30,
-            layoutAnimationDurationMs: root["layout-animation-duration-ms"]?.asIntOrNil ?? 160,
+            layoutAnimationDurationMs: root["layout-animation-duration-ms"]?.asIntOrNil ?? 0,
             layoutAnimationRespectsReduceMotion: root["layout-animation-respect-reduce-motion"]?.asBoolOrNil ?? true,
             persistentWorkspaces: stringList(root["persistent-workspaces"]),
             onFocusedMonitorChanged: stringList(root["on-focused-monitor-changed"]),

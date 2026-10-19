@@ -220,22 +220,9 @@ private struct SmoothLayoutSettingsView: View {
                 )
             }
 
-            SettingsCard(
-                "Animations",
-                systemImage: "waveform.path",
-                help: "Duration controls how long a coordinated window reflow takes. Reduce Motion follows the macOS Accessibility preference. A duration of 0 disables layout animations.",
-            ) {
-                Stepper(
-                    "Duration: \(configSettings.draft.layoutAnimationDurationMs) ms",
-                    value: $configSettings.draft.layoutAnimationDurationMs,
-                    in: 0 ... 1000,
-                    step: 10,
-                )
-                Toggle(
-                    "Respect the macOS Reduce Motion setting",
-                    isOn: $configSettings.draft.layoutAnimationRespectsReduceMotion,
-                )
-                Text("Use 0 ms to disable animations. The current default is 160 ms.")
+            SettingsCard("Window transitions", systemImage: "bolt.fill", help: "TileSail applies final window frames immediately.") {
+                Text("Window layouts, resizing, and TileSail fullscreen are applied immediately without animation.")
+                Text("Legacy animation options remain compatible with existing TOML files but no longer enable animations. Native macOS minimize and fullscreen effects are controlled by macOS.")
                     .font(.caption)
                     .foregroundStyle(.secondary)
             }

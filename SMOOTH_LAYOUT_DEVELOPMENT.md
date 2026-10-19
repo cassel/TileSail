@@ -45,8 +45,8 @@ comments, ordering, and unknown advanced options remain intact.
 ## Configuration
 
 ```toml
-# 0 disables layout animations. Accepted range: 0...1000.
-layout-animation-duration-ms = 160
+# Legacy compatibility only: layouts always apply immediately.
+layout-animation-duration-ms = 0
 
 layout-animation-respect-reduce-motion = true
 ```

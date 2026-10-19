@@ -1,0 +1,25 @@
+name: TileSail release
+
+on:
+  push:
+    tags: ['v*']
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    runs-on: macos-26
+    steps:
+      - uses: actions/checkout@v6
+      - run: ./.github/gh-actions-runner-xcode-select.sh
+      - name: Test Swift
+        run: swift test
+      - name: Test packaging and migration helpers
+        run: python3 -m unittest discover -s script/tests -v
+      - name: Build universal Release DMG
+        run: bash script/build-dmg.sh "${GITHUB_REF_NAME#v}"
+      - name: Publish installer, checksum and build metadata
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: bash script/publish-release.sh --build-version "${GITHUB_REF_NAME#v}" --publish

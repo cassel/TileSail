@@ -17,6 +17,7 @@ final class MacApp: AbstractApp {
     var lastNativeFocusedWindowId: UInt32? = nil
     private var thread: Thread?
     private var setFrameJobs: [UInt32: RunLoopJob] = [:]
+    private var visibilityJobs: [UInt32: RunLoopJob] = [:]
     @MainActor private static var focusJob: RunLoopJob? = nil
 
     /*conforms*/ var name: String? { nsApp.localizedName }
@@ -66,6 +67,7 @@ final class MacApp: AbstractApp {
         let thread = Thread {
             $axTaskLocalAppThreadToken.withValue(AxAppThreadToken(pid: pid, idForDebug: nsApp.idForDebug)) {
                 let axApp = AXUIElementCreateApplication(nsApp.processIdentifier)
+                AXUIElementSetMessagingTimeout(axApp, 1)
                 let handlers: HandlerToNotifKeyMapping = unsafe [
                     (refreshObs, [kAXWindowCreatedNotification, kAXFocusedWindowChangedNotification]),
                 ]
@@ -104,6 +106,7 @@ final class MacApp: AbstractApp {
 
     func closeAndUnregisterAxWindow(_ windowId: UInt32) {
         if serverArgs.isReadOnly { return }
+        visibilityJobs.removeValue(forKey: windowId)?.cancel()
         setFrameJobs.removeValue(forKey: windowId)?.cancel()
         _ = withWindowAsync(windowId, .cancellable) { [windows] window, job in
             guard let closeButton = window.get(Ax.closeButtonAttr) else { return }
@@ -174,16 +177,14 @@ final class MacApp: AbstractApp {
     func setAxFrameForTermination(_ windowId: UInt32, _ topLeft: CGPoint?, _ size: CGSize?) {
         setFrameJobs.removeValue(forKey: windowId)?.cancel()
         let semaphore = DispatchSemaphore(value: 0)
-        let job = withWindowAsync(windowId, .nonCancellable) { [axApp] window, job in
+        let job = thread?.runInLoopAsync(job: RunLoopJob(.nonCancellable)) { [axApp, windows] job in
+            defer { semaphore.signal() }
+            guard let window = windows.threadGuarded[windowId] else { return }
             try? disableAnimations(app: axApp.threadGuarded, job) {
-                try setFrame(window, topLeft, size, job)
+                try setFrame(window.ax, topLeft, size, job)
             }
-            semaphore.signal()
-        }
-        switch job.isCancelled {
-            case true: return
-            case false: semaphore.wait()
-        }
+        } ?? .cancelled
+        if !job.isCancelled { _ = semaphore.wait(timeout: .now() + 1) }
     }
 
     func getAxWindowsCount(_ cm: CancellationMode) async throws -> Int? {
@@ -200,13 +201,11 @@ final class MacApp: AbstractApp {
 
     func getAxRectForTermination(_ windowId: UInt32) -> Rect? {
         let future = CompletableFuture<Rect?>()
-        let job = withWindowAsync(windowId, .nonCancellable) { window, job in
-            future.complete(try AppBundle.getAxRect(window: window, job: job))
-        }
-        return switch job.isCancelled {
-            case true: nil
-            case false: future.blockingGet()
-        }
+        let job = thread?.runInLoopAsync(job: RunLoopJob(.nonCancellable)) { [windows] job in
+            let rect = try? windows.threadGuarded[windowId].flatMap { try AppBundle.getAxRect(window: $0.ax, job: job) }
+            future.complete(rect)
+        } ?? .cancelled
+        return job.isCancelled ? nil : future.blockingGet(timeout: .now() + 1, fallback: nil)
     }
 
     func isWindowHeuristic(_ windowId: UInt32, _ windowLevel: MacOsWindowLevel?, _ cm: CancellationMode) async throws -> Bool {
@@ -234,16 +233,22 @@ final class MacApp: AbstractApp {
     }
 
     func setNativeFullscreen(_ windowId: UInt32, _ value: Bool) {
-        setFrameJobs.removeValue(forKey: windowId)?.cancel()
-        setFrameJobs[windowId] = withWindowAsync(windowId, .cancellable) { window, job in
-            window.set(Ax.isFullscreenAttr, value)
+        if serverArgs.isReadOnly { return }
+        visibilityJobs.removeValue(forKey: windowId)?.cancel()
+        visibilityJobs[windowId] = withWindowAsync(windowId, .cancellable) { [axApp] window, job in
+            _ = try disableAnimations(app: axApp.threadGuarded, job) {
+                window.set(Ax.isFullscreenAttr, value)
+            }
         }
     }
 
     func setNativeMinimized(_ windowId: UInt32, _ value: Bool) {
-        setFrameJobs.removeValue(forKey: windowId)?.cancel()
-        setFrameJobs[windowId] = withWindowAsync(windowId, .cancellable) { window, job in
-            window.set(Ax.minimizedAttr, value)
+        if serverArgs.isReadOnly { return }
+        visibilityJobs.removeValue(forKey: windowId)?.cancel()
+        visibilityJobs[windowId] = withWindowAsync(windowId, .cancellable) { [axApp] window, job in
+            _ = try disableAnimations(app: axApp.threadGuarded, job) {
+                window.set(Ax.minimizedAttr, value)
+            }
         }
     }
 
@@ -262,7 +267,7 @@ final class MacApp: AbstractApp {
             defer { semaphore.signal() }
             windows.threadGuarded[windowId]?.ax.set(Ax.minimizedAttr, false)
         } ?? .cancelled
-        if !job.isCancelled { semaphore.wait() }
+        if !job.isCancelled { _ = semaphore.wait(timeout: .now() + 1) }
     }
 
     func dumpWindowAxInfo(windowId: UInt32, _ cm: CancellationMode) async throws -> [String: Json] {
@@ -401,6 +406,7 @@ final class MacApp: AbstractApp {
         }
         windowsCount = alive.count
         for windowId in dead {
+            visibilityJobs.removeValue(forKey: windowId)?.cancel()
             setFrameJobs.removeValue(forKey: windowId)?.cancel()
         }
         return alive
@@ -412,6 +418,8 @@ final class MacApp: AbstractApp {
             job.cancel()
         }
         setFrameJobs = [:]
+        for job in visibilityJobs.values { job.cancel() }
+        visibilityJobs = [:]
         thread?.runInLoopAsync(job: RunLoopJob(.nonCancellable)) { job in CFRunLoopStop(CFRunLoopGetCurrent()) }
         thread = nil // Disallow all future job submissions
     }
@@ -486,6 +494,12 @@ private func getAxRect(window: AXUIElement, job: RunLoopJob) throws -> Rect? {
 }
 
 private func setFrame(_ window: AXUIElement, _ topLeft: CGPoint?, _ size: CGSize?, _ job: RunLoopJob) throws {
+    // Avoid self-generated resize/move notifications for unchanged frames.
+    let current = try getAxRect(window: window, job: job)
+    if let current,
+       (size == nil || current.size == size),
+       (topLeft == nil || current.topLeftCorner == topLeft)
+    { return }
     // Set size and then the position. The order is important https://github.com/nikitabobko/AeroSpace/issues/143
     //                                                        https://github.com/nikitabobko/AeroSpace/issues/335
     if let size { window.set(Ax.sizeAttr, size) }

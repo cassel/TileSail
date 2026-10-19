@@ -59,7 +59,7 @@ private struct AppServerTerminationHandler: TerminationHandler {
                 await toggleReleaseServerIfDebug(.on)
                 semaphore.signal()
             }
-            semaphore.wait()
+            _ = semaphore.wait(timeout: .now() + 2)
         }
     }
 }

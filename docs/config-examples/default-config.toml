@@ -26,11 +26,8 @@ enable-normalization-opposite-orientation-for-nested-containers = true
 # You can set 0 to disable the padding feature
 accordion-padding = 30
 
-# Smoothly animate window reflows inside the same monitor. Set to 0 to disable.
-# Cross-monitor and workspace transitions are always applied immediately.
-layout-animation-duration-ms = 160
-
-# Follow the macOS System Settings > Accessibility > Display > Reduce motion preference.
+# Legacy options retained for compatibility. Layouts always apply immediately.
+layout-animation-duration-ms = 0
 layout-animation-respect-reduce-motion = true
 
 # Possible values: tiles|accordion
